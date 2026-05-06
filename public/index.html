@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Aether Athletics — Pipeline</title>
+<style>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px;
+    line-height: 1.6;
+  }
+  h1 { color: #f1f5f9; font-size: 28px; margin-bottom: 8px; }
+  .sub { color: #94a3b8; margin-bottom: 32px; }
+  .card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 16px; margin: 0 0 8px; color: #f1f5f9; }
+  .card p { margin: 4px 0; color: #cbd5e1; font-size: 14px; }
+  code {
+    background: #0f172a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #93c5fd;
+    font-size: 13px;
+  }
+  a { color: #60a5fa; }
+</style>
+</head>
+<body>
+  <h1>Aether Athletics — Ad Pipeline</h1>
+  <p class="sub">Daily Meta Ads pull → Google Sheets → Telegram briefing</p>
+
+  <div class="card">
+    <h2>📅 Schedules</h2>
+    <p>7:00am SGT — Daily pull (yesterday's Meta data → Sheet)</p>
+    <p>7:30am SGT — AI insight + Telegram briefing</p>
+  </div>
+
+  <div class="card">
+    <h2>🔧 Manual Endpoints</h2>
+    <p><code>/api/diagnostic</code> — verify all integrations</p>
+    <p><code>/api/daily-pull</code> — pull yesterday now</p>
+    <p><code>/api/daily-pull?date=2026-05-01</code> — pull a specific date</p>
+    <p><code>/api/daily-insight?preview=true</code> — preview message without sending</p>
+    <p><code>/api/daily-insight</code> — generate + send Telegram now</p>
+    <p><code>/api/backfill?start=2026-01-01&end=2026-05-05</code> — historical backfill</p>
+  </div>
+
+  <div class="card">
+    <h2>📊 Data Sheet</h2>
+    <p>Tab: <code>META RAW</code></p>
+    <p>Columns: Date, Spend, Impressions, Clicks, CPM, CTR, CPC, Conversions, Cost Per Conversion</p>
+  </div>
+</body>
+</html>

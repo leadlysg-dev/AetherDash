@@ -1,0 +1,13 @@
+{
+  "name": "aa-pipeline",
+  "version": "1.0.0",
+  "description": "Aether Athletics — daily Meta Ads pull, Google Sheets writer, Telegram AI briefing",
+  "scripts": {
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "googleapis": "^131.0.0",
+    "node-fetch": "^2.7.0",
+    "@anthropic-ai/sdk": "^0.30.0"
+  }
+}
