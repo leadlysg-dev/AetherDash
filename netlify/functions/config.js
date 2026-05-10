@@ -2,6 +2,21 @@
 // AETHER ATHLETICS — CONFIG
 // ============================================================
 
+// Auto-normalize the ad account ID:
+// - strips whitespace
+// - removes accidentally-pasted "act_" duplicates
+// - adds "act_" prefix if missing
+function normalizeAdAccountId(raw) {
+  if (!raw) return "";
+  let id = String(raw).trim();
+  // Remove all "act_" prefixes (in case user pasted "act_act_123")
+  id = id.replace(/^(act_)+/i, "");
+  // Strip non-numeric chars in case there's a stray space
+  id = id.replace(/[^0-9]/g, "");
+  if (!id) return "";
+  return "act_" + id;
+}
+
 const CONFIG = {
   client: {
     name: "Aether Athletics",
@@ -9,8 +24,8 @@ const CONFIG = {
     timezone: "Asia/Singapore",
   },
   meta: {
-    accessToken: process.env.META_ACCESS_TOKEN,
-    adAccountId: process.env.META_AD_ACCOUNT_ID,
+    accessToken: (process.env.META_ACCESS_TOKEN || "").trim(),
+    adAccountId: normalizeAdAccountId(process.env.META_AD_ACCOUNT_ID),
     apiVersion: "v21.0",
   },
   google: {

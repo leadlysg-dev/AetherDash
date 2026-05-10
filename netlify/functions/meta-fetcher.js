@@ -78,6 +78,13 @@ async function fetchCampaignInsightsForDate(date) {
   const data = await res.json();
 
   if (data.error) {
+    // Code 100 with "nonexisting field" usually = wrong ad account ID format,
+    // missing permissions, or revoked token.
+    if (data.error.code === 100) {
+      throw new Error(
+        `Meta insights: ${data.error.message} — Check META_AD_ACCOUNT_ID is "act_NUMBERS" and that the system user has access to that ad account.`
+      );
+    }
     throw new Error(`Meta insights: ${data.error.message} (code ${data.error.code})`);
   }
   return data.data || [];

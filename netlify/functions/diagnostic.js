@@ -8,20 +8,26 @@ exports.handler = async () => {
 
   try {
     if (!CONFIG.meta.accessToken) throw new Error("META_ACCESS_TOKEN missing");
-    if (!CONFIG.meta.adAccountId) throw new Error("META_AD_ACCOUNT_ID missing");
+    if (!CONFIG.meta.adAccountId) throw new Error("META_AD_ACCOUNT_ID missing or invalid (must contain digits)");
     const url = `https://graph.facebook.com/${CONFIG.meta.apiVersion}/${CONFIG.meta.adAccountId}?fields=name,account_status,currency,timezone_name&access_token=${CONFIG.meta.accessToken}`;
     const res = await fetch(url);
     const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
+    if (data.error) {
+      const hint = data.error.code === 100
+        ? " — Check META_AD_ACCOUNT_ID is 'act_NUMBERS' and the system user has access."
+        : "";
+      throw new Error(data.error.message + hint);
+    }
     checks.meta = {
       ok: true,
+      adAccountIdResolved: CONFIG.meta.adAccountId,
       accountName: data.name,
       currency: data.currency,
       timezone: data.timezone_name,
       status: data.account_status,
     };
   } catch (err) {
-    checks.meta = { ok: false, error: err.message };
+    checks.meta = { ok: false, error: err.message, adAccountIdResolved: CONFIG.meta.adAccountId };
   }
 
   try {
