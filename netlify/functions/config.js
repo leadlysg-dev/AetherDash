@@ -16,7 +16,7 @@ const CONFIG = {
   google: {
     sheetId: process.env.GOOGLE_SHEET_ID,
     serviceAccountEmail: process.env.GOOGLE_SA_CLIENT_EMAIL,
-    serviceAccountKey: process.env.GOOGLE_SA_PRIVATE_KEY, // base64 encoded raw body
+    serviceAccountKey: process.env.GOOGLE_SA_PRIVATE_KEY,
   },
   telegram: {
     botToken: process.env.TELEGRAM_BOT_TOKEN,
@@ -46,7 +46,6 @@ const CONFIG = {
 // ============================================================
 
 function getYesterdaySGT() {
-  // Get yesterday in SGT (UTC+8)
   const now = new Date();
   const sgtNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
   sgtNow.setUTCDate(sgtNow.getUTCDate() - 1);
@@ -67,17 +66,34 @@ function getServiceAccountCredentials() {
   if (!CONFIG.google.serviceAccountEmail) {
     throw new Error("GOOGLE_SA_CLIENT_EMAIL env var is missing");
   }
-  // The private key body is stored as raw base64 in env var (no PEM headers)
-  // Reconstruct PEM format
-  const rawKey = Buffer.from(CONFIG.google.serviceAccountKey, "base64").toString("utf-8");
-  // Wrap into proper PEM format
-  const pemKey = `-----BEGIN PRIVATE KEY-----\n${rawKey
-    .match(/.{1,64}/g)
-    .join("\n")}\n-----END PRIVATE KEY-----\n`;
+
+  let privateKey = CONFIG.google.serviceAccountKey;
+
+  // Handle: literal "\n" sequences (common when pasting JSON-encoded private_key into env vars)
+  // Convert them into real newline characters
+  privateKey = privateKey.replace(/\\n/g, "\n");
+
+  // Handle: if it's base64-encoded (no PEM headers), decode and wrap
+  if (!privateKey.includes("BEGIN PRIVATE KEY")) {
+    try {
+      const raw = Buffer.from(privateKey, "base64").toString("utf-8");
+      if (raw.includes("BEGIN PRIVATE KEY")) {
+        privateKey = raw;
+      } else {
+        privateKey = `-----BEGIN PRIVATE KEY-----\n${privateKey
+          .match(/.{1,64}/g)
+          .join("\n")}\n-----END PRIVATE KEY-----\n`;
+      }
+    } catch (e) {
+      throw new Error(
+        "GOOGLE_SA_PRIVATE_KEY format not recognized. Paste the 'private_key' value from your service account JSON."
+      );
+    }
+  }
 
   return {
     client_email: CONFIG.google.serviceAccountEmail,
-    private_key: pemKey,
+    private_key: privateKey,
   };
 }
 
