@@ -6,8 +6,8 @@ Distinguishes **Brand Awareness (BA)** vs **Lead-gen** campaigns automatically b
 
 ## What this does
 
-- **7:00am SGT** — pulls yesterday's **ad-level** Meta data (one row per ad per day), writes to sheet
-- **7:30am SGT** — generates AI briefing (gym-owner voice, rolled up to campaign level), posts to Telegram
+- **12:01am SGT daily** — pulls yesterday's **ad-level** Meta data (one row per ad per day), writes to sheet
+- **Monday 8:00am SGT only** — generates AI briefing (gym-owner voice, rolled up to campaign level), posts to Telegram
 - **Dashboard** at `/dashboard.html` — live performance view: KPIs, sparklines, campaign / ad set / ad tables
 
 ## Architecture
@@ -95,6 +95,6 @@ No double-counting from `lead_grouped` or `leadgen.other`.
 
 ## Daily ops
 
-- 7:00am SGT: scheduled `daily-pull` runs automatically (Netlify cron `0 23 * * *` UTC)
-- 7:30am SGT: scheduled `daily-insight` runs (Netlify cron `30 23 * * *` UTC)
+- **12:01am SGT** every day: scheduled `daily-pull` runs automatically (Netlify cron `1 16 * * *` UTC)
+- **Monday 8:00am SGT** weekly: scheduled `daily-insight` runs (Netlify cron `0 0 * * 1` UTC)
 - Dashboard auto-fetches from sheet on each page load

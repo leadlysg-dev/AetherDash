@@ -56,6 +56,7 @@ exports.handler = async (event) => {
   }
 };
 
+// Scheduled: 12:01am SGT daily (16:01 UTC previous day)
 exports.config = {
-  schedule: "0 23 * * *",
+  schedule: "1 16 * * *",
 };

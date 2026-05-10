@@ -325,6 +325,7 @@ exports.handler = async (event) => {
   }
 };
 
+// Scheduled: Monday 8:00am SGT only (00:00 UTC Monday)
 exports.config = {
-  schedule: "30 23 * * *",
+  schedule: "0 0 * * 1",
 };
