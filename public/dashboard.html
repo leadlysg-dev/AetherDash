@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aether Athletics · Ad Performance Report</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f4f6f8;--surface:#fff;--surface-alt:#f0f2f5;--surface-hover:#fafbfc;
+  --text:#1b2130;--text-sec:#5a6478;--text-ter:#8f96a3;
+  --border:#e2e5ea;--border-light:#eef0f3;
+  --green:#0d7c5f;--green-light:#e6f5f0;--green-dark:#095c47;--green-muted:#b4e0d2;
+  --meta:#1877f2;--meta-light:#e8f1fe;
+  --ba:#7c5dd9;--ba-light:#f0ecfb;
+  --leads:#0d7c5f;--leads-light:#e6f5f0;
+  --red:#d94545;--red-light:#fdeaea;
+  --amber:#e09818;--amber-light:#fdf4e1;
+  --r:10px;--r-lg:14px;
+  --sh:0 1px 3px rgba(27,33,48,.05),0 1px 2px rgba(27,33,48,.03);
+  --sh-md:0 4px 16px rgba(27,33,48,.06);
+  --sh-lg:0 8px 30px rgba(27,33,48,.08);
+  --font:'Outfit',system-ui,sans-serif;
+  --mono:'IBM Plex Mono',monospace;
+}
+html{font-size:14.5px;scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);line-height:1.55;-webkit-font-smoothing:antialiased}
+.container{max-width:1320px;margin:0 auto;padding:0 20px}
+
+/* === LOADING === */
+.loading-overlay{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1000;gap:14px}
+.loading-overlay.hidden{opacity:0;pointer-events:none;transition:opacity .3s}
+.ld-spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite}
+.ld-text{font-size:.9rem;color:var(--text-sec);font-weight:500}
+.load-error{background:var(--red-light);color:var(--red);padding:24px 32px;border-radius:var(--r);text-align:center;max-width:440px;font-size:.88rem;line-height:1.6}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* === ACTIVE LEAD CAMPAIGN BANNER === */
+.active-banner{
+  background:var(--surface);border-radius:var(--r-lg);padding:18px 24px;margin:16px 0 14px;
+  box-shadow:var(--sh);border:1px solid var(--border-light);
+  display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;
+  position:relative;overflow:hidden;
+}
+.active-banner.live{border-left:3px solid var(--green)}
+.active-banner.idle{border-left:3px solid var(--text-ter)}
+.ab-left{display:flex;flex-direction:column;gap:4px;min-width:0;flex:1}
+.ab-tag{display:flex;align-items:center;gap:8px;font-size:.66rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-ter);font-weight:700}
+.ab-dot{width:8px;height:8px;border-radius:50%}
+.ab-dot.live{background:var(--green);box-shadow:0 0 0 3px rgba(13,124,95,.18);animation:liveBlink 2s ease-in-out infinite}
+.ab-dot.idle{background:var(--text-ter)}
+@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.5}}
+.ab-headline{font-size:1.08rem;font-weight:600;color:var(--text);letter-spacing:-.01em}
+.ab-sub{font-size:.78rem;color:var(--text-sec)}
+.ab-right{display:flex;gap:24px;flex-wrap:wrap}
+.ab-stat{text-align:right}
+.ab-stat-label{font-size:.62rem;color:var(--text-ter);text-transform:uppercase;letter-spacing:.07em;font-weight:700;margin-bottom:3px}
+.ab-stat-val{font-family:var(--mono);font-size:1.18rem;font-weight:600;color:var(--text);letter-spacing:-.02em}
+.ab-stat-sub{font-size:.65rem;color:var(--text-ter);margin-top:1px;font-family:var(--mono)}
+.ab-stat-val.good{color:var(--green-dark)}
+.ab-stat-val.bad{color:var(--red)}
+.ab-progress{margin-top:12px;width:100%}
+.ab-progress-track{height:6px;background:var(--surface-alt);border-radius:3px;overflow:hidden}
+.ab-progress-fill{height:100%;background:var(--green);border-radius:3px;transition:width 0.4s ease}
+.ab-progress-meta{display:flex;justify-content:space-between;margin-top:5px;font-size:.66rem;color:var(--text-ter);font-family:var(--mono)}
+
+/* === DATE SELECTOR === */
+.date-selector{background:var(--surface);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:14px 20px;margin:20px 0 10px;box-shadow:var(--sh);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.ds-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ds-left label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter)}
+.ds-pills{display:flex;gap:5px;flex-wrap:wrap}
+.ds-range{font-family:var(--mono);font-size:.76rem;color:var(--green-dark);background:var(--green-light);padding:5px 14px;border-radius:50px;font-weight:500;white-space:nowrap}
+@media(max-width:640px){.date-selector{flex-direction:column;align-items:flex-start}}
+
+/* === FILTERS === */
+.filters{display:flex;flex-direction:column;gap:10px;margin:0 0 20px;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--r-lg);padding:16px 20px;box-shadow:var(--sh)}
+.f-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.f-row label{font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);min-width:76px;flex-shrink:0}
+.pill{font-family:var(--font);font-size:.78rem;padding:5px 14px;border:1px solid var(--border);border-radius:50px;background:var(--bg);color:var(--text-sec);cursor:pointer;transition:all .12s;font-weight:500;white-space:nowrap}
+.pill:hover{border-color:var(--green);color:var(--green)}
+.pill.on{background:var(--green);color:#fff;border-color:var(--green)}
+.pill.on.ba{background:var(--ba);border-color:var(--ba)}
+.pill.on.leads{background:var(--leads);border-color:var(--leads)}
+/* custom range */
+.drp{display:none;align-items:center;gap:8px;flex-wrap:wrap;width:100%;margin-top:6px}.drp.open{display:flex}
+.drp input[type="date"]{font-family:var(--mono);font-size:.78rem;padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text);outline:none}
+.drp input:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(13,124,95,.1)}
+.drp-apply{font-family:var(--font);font-size:.76rem;font-weight:600;padding:6px 18px;background:var(--green);color:#fff;border:none;border-radius:6px;cursor:pointer}
+.drp-apply:hover{background:var(--green-dark)}
+
+/* === KPIs === */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}
+.kpi{background:var(--surface);border-radius:var(--r);padding:16px 18px;box-shadow:var(--sh);border:1px solid var(--border-light);position:relative;overflow:hidden;transition:box-shadow .15s}
+.kpi:hover{box-shadow:var(--sh-md)}
+.kpi::after{content:'';position:absolute;top:0;left:0;right:0;height:2.5px;background:var(--green);opacity:.6}
+.kpi-lbl{font-size:.66rem;text-transform:uppercase;letter-spacing:.07em;color:var(--text-ter);font-weight:600;margin-bottom:4px}
+.kpi-val{font-family:var(--mono);font-size:1.4rem;font-weight:500;color:var(--text);letter-spacing:-.02em;line-height:1.2}
+.kpi-sub{font-size:.66rem;color:var(--text-ter);margin-top:3px}
+.kpi-badge{display:inline-flex;align-items:center;gap:3px;font-size:.66rem;font-weight:600;padding:2px 8px;border-radius:50px;margin-top:5px}
+.kpi-badge.up{background:var(--green-light);color:var(--green-dark)}
+.kpi-badge.down{background:var(--red-light);color:var(--red)}
+.kpi-badge.flat{background:var(--surface-alt);color:var(--text-ter)}
+.kpi-badge .vs{font-weight:400;opacity:.65}
+
+/* === TABS === */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:18px;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tab{font-family:var(--font);font-size:.82rem;font-weight:500;padding:10px 18px;background:none;border:none;color:var(--text-ter);cursor:pointer;position:relative;transition:color .12s;white-space:nowrap}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--green)}
+.tab.on::after{content:'';position:absolute;bottom:-2px;left:0;right:0;height:2px;background:var(--green);border-radius:2px 2px 0 0}
+.tp{display:none}.tp.on{display:block}
+
+/* === CHARTS === */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.chart-card{background:var(--surface);border-radius:var(--r-lg);padding:20px;box-shadow:var(--sh);border:1px solid var(--border-light)}
+.chart-card.full{grid-column:1/-1}
+.chart-card h3{font-size:.82rem;font-weight:600;margin-bottom:4px;color:var(--text)}
+.chart-desc{font-size:.7rem;color:var(--text-ter);margin-bottom:14px;line-height:1.4}
+.chart-card canvas{width:100%!important;max-height:280px}
+
+/* === TABLES === */
+.tbl-section{margin-bottom:20px}
+.tbl-title{font-size:.9rem;font-weight:600;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.badge{font-size:.6rem;text-transform:uppercase;letter-spacing:.06em;padding:3px 10px;border-radius:50px;font-weight:700}
+.badge-leads{background:var(--leads-light);color:var(--leads)}
+.badge-ba{background:var(--ba-light);color:var(--ba)}
+.badge-other{background:var(--surface-alt);color:var(--text-ter)}
+.badge-active{background:var(--green-light);color:var(--green-dark)}
+.badge-paused{background:var(--surface-alt);color:var(--text-ter)}
+.tbl-wrap{overflow-x:auto;background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--sh);border:1px solid var(--border-light)}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+thead th{background:var(--surface-alt);padding:9px 12px;text-align:left;font-weight:600;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-ter);border-bottom:1px solid var(--border);white-space:nowrap}
+thead th.num{text-align:right}
+tbody td{padding:8px 12px;border-bottom:1px solid var(--border-light);white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+td.num{font-family:var(--mono);font-size:.76rem;text-align:right}
+td.num.good{color:var(--green-dark)}
+td.num.bad{color:var(--red)}
+td.cname{font-weight:600;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+.camp-row{cursor:pointer;transition:background .1s}
+.camp-row:hover{background:var(--surface-hover)}
+.camp-row td:first-child::before{content:'▸';display:inline-block;margin-right:6px;font-size:.7rem;color:var(--text-ter);transition:transform .15s}
+.camp-row.expanded td:first-child::before{transform:rotate(90deg)}
+.day-row{display:none;background:var(--surface-alt)}
+.day-row.show{display:table-row}
+.day-row td{font-size:.72rem;color:var(--text-sec);padding:6px 12px}
+.day-row td:first-child{padding-left:32px;color:var(--text-sec)}
+.tbl-empty{text-align:center;padding:24px;color:var(--text-ter);font-size:.82rem}
+
+/* === INSIGHT CARDS === */
+.insight-row-3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:14px}
+.insight-row-2{display:grid;grid-template-columns:1.6fr 1fr;gap:14px;margin-bottom:14px}
+.insight-row-1{margin-bottom:14px}
+.insight-row-perf{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:14px}
+.insight-card{background:var(--surface);border-radius:var(--r-lg);padding:20px 22px;box-shadow:var(--sh);border:1px solid var(--border-light);transition:box-shadow .15s;animation:fadeUp .35s ease both}
+.insight-card:hover{box-shadow:var(--sh-md)}
+.insight-card.full{width:100%}
+.ic-head{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.ic-label{font-size:.78rem;font-weight:600;color:var(--text)}
+.ic-icon{font-size:1.3rem;opacity:.7}
+.ic-big{font-family:var(--mono);font-size:2rem;font-weight:600;color:var(--text);letter-spacing:-.03em;line-height:1.1}
+.ic-big.good{color:var(--green-dark)}
+.ic-big.bad{color:var(--red)}
+.ic-sub{font-size:.7rem;color:var(--text-ter);margin-top:2px}
+.ic-mini{margin-top:12px}
+.ic-mini canvas{width:100%!important;max-height:50px}
+.perf-card{background:var(--surface);border-radius:var(--r-lg);padding:16px 20px;box-shadow:var(--sh);border:1px solid var(--border-light);animation:fadeUp .35s ease both}
+.perf-card .perf-label{font-size:.68rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-ter);font-weight:600;margin-bottom:4px}
+.perf-card .perf-name{font-size:1rem;font-weight:700;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.perf-card .perf-val{font-family:var(--mono);font-size:.88rem;color:var(--green-dark)}
+.perf-card .perf-sub{font-size:.66rem;color:var(--text-ter);margin-top:2px}
+
+/* === FOOTER === */
+footer{padding:20px 0;text-align:center;font-size:.68rem;color:var(--text-ter);border-top:1px solid var(--border-light);margin-top:20px}
+footer a{color:var(--text-ter);text-decoration:none}footer a:hover{color:var(--green)}
+
+/* === ANIMATIONS === */
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.kpi,.chart-card,.tbl-wrap{animation:fadeUp .35s ease both}
+
+/* === RESPONSIVE === */
+@media(max-width:1024px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .chart-grid{grid-template-columns:1fr}
+  .insight-row-3{grid-template-columns:1fr}
+  .insight-row-2{grid-template-columns:1fr}
+}
+@media(max-width:640px){
+  .kpis{grid-template-columns:1fr 1fr;gap:8px}
+  .kpi{padding:12px 14px}.kpi-val{font-size:1.15rem}
+  .f-row{gap:6px}.f-row label{min-width:60px;font-size:.64rem}
+  .pill{font-size:.7rem;padding:4px 10px}
+  .tab{font-size:.76rem;padding:9px 14px;flex-shrink:0}
+  .container{padding:0 12px}
+  .chart-card,.insight-card{padding:14px}
+  .ab-stat-val{font-size:1rem}
+  .active-banner{padding:14px 16px}
+}
+@media(max-width:420px){.kpis{grid-template-columns:1fr}}
+
+/* === PRINT === */
+@media print{.date-selector,.filters,.tabs{display:none}.kpi,.chart-card{break-inside:avoid}body{font-size:12px}}
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="ld-spinner"></div>
+  <div class="ld-text">Loading live data…</div>
+</div>
+
+<div class="container" style="padding-top:20px;padding-bottom:30px">
+
+  <!-- ACTIVE LEAD CAMPAIGN BANNER -->
+  <div id="activeBanner"></div>
+
+  <!-- DATE SELECTOR -->
+  <div class="date-selector">
+    <div class="ds-left">
+      <label>Period</label>
+      <div id="periodFilter" class="ds-pills">
+        <button class="pill" data-v="yesterday">Yesterday</button>
+        <button class="pill" data-v="7d">Last 7 days</button>
+        <button class="pill on" data-v="30d">Last 30 days</button>
+        <button class="pill" data-v="90d">Last 90 days</button>
+        <button class="pill" data-v="ytd">YTD 2026</button>
+        <button class="pill" data-v="custom" id="customBtn">Custom</button>
+      </div>
+    </div>
+    <span class="ds-range" id="periodTag"></span>
+    <div class="drp" id="drpRow">
+      <input type="date" id="drpFrom">
+      <span style="color:var(--text-ter)">–</span>
+      <input type="date" id="drpTo">
+      <button class="drp-apply" id="drpApply">Apply</button>
+    </div>
+  </div>
+
+  <!-- FILTERS -->
+  <div class="filters">
+    <div class="f-row">
+      <label>Type</label>
+      <div id="typeFilter" style="display:flex;gap:5px;flex-wrap:wrap">
+        <button class="pill on" data-v="all">All</button>
+        <button class="pill" data-v="Leads">Leads</button>
+        <button class="pill" data-v="BA">Brand Awareness</button>
+        <button class="pill" data-v="Other">Other</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpis" id="kpis"></div>
+
+  <!-- TABS -->
+  <div class="tabs" id="tabBar">
+    <button class="tab on" data-t="breakdown">Campaign Breakdown</button>
+    <button class="tab" data-t="insights">Insights</button>
+    <button class="tab" data-t="runs">Lead Campaigns</button>
+  </div>
+
+  <!-- CAMPAIGN BREAKDOWN -->
+  <div class="tp on" id="tp-breakdown">
+    <div class="tbl-section" id="leadsSection">
+      <div class="tbl-title"><span class="badge badge-leads">Leads</span> Lead-Gen Campaigns</div>
+      <div class="tbl-wrap"><table id="tblLeads"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tbl-section" id="baSection">
+      <div class="tbl-title"><span class="badge badge-ba">BA</span> Brand Awareness Campaigns</div>
+      <div class="tbl-wrap"><table id="tblBA"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tbl-section" id="otherSection" style="display:none">
+      <div class="tbl-title"><span class="badge badge-other">Other</span> Other Campaigns</div>
+      <div class="tbl-wrap"><table id="tblOther"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div class="tp" id="tp-insights">
+    <div class="insight-row-3">
+      <div class="insight-card">
+        <div class="ic-head"><span class="ic-label">Total Leads</span><span class="ic-icon">🎣</span></div>
+        <div class="ic-big" id="insLeadsTotal">—</div>
+        <div class="ic-sub" id="insLeadsSub">across the period</div>
+        <div class="ic-mini"><canvas id="cMiniLeads"></canvas></div>
+      </div>
+      <div class="insight-card">
+        <div class="ic-head"><span class="ic-label">Avg Cost / Lead</span><span class="ic-icon">💰</span></div>
+        <div class="ic-big" id="insCPL">—</div>
+        <div class="ic-sub" id="insCPLSub">target —</div>
+        <div class="ic-mini"><canvas id="cMiniCPL"></canvas></div>
+      </div>
+      <div class="insight-card">
+        <div class="ic-head"><span class="ic-label">BA Reach</span><span class="ic-icon">📡</span></div>
+        <div class="ic-big" id="insReach">—</div>
+        <div class="ic-sub" id="insReachSub">people reached</div>
+        <div class="ic-mini"><canvas id="cMiniReach"></canvas></div>
+      </div>
+    </div>
+
+    <div class="insight-row-2">
+      <div class="insight-card wide">
+        <div class="ic-head"><span class="ic-label">Daily Spend by Type</span></div>
+        <div class="ic-sub" style="margin-bottom:12px">Stacked: BA (violet) vs Leads (green)</div>
+        <canvas id="cSpendByType" style="max-height:220px"></canvas>
+      </div>
+      <div class="insight-card">
+        <div class="ic-head"><span class="ic-label">Spend Allocation</span></div>
+        <div class="ic-sub" style="margin-bottom:12px">Where the budget went</div>
+        <canvas id="cBudget" style="max-height:200px"></canvas>
+      </div>
+    </div>
+
+    <div class="insight-row-1">
+      <div class="insight-card full">
+        <div class="ic-head"><span class="ic-label">Daily Leads &amp; CPL Trend</span></div>
+        <div class="ic-sub" style="margin-bottom:12px">Bars = leads, line = cost per lead, dashed line = target CPL</div>
+        <canvas id="cLeadsCPL" style="max-height:240px"></canvas>
+      </div>
+    </div>
+
+    <div class="insight-row-perf" id="insPerfCards"></div>
+  </div>
+
+  <!-- LEAD CAMPAIGN HISTORY -->
+  <div class="tp" id="tp-runs">
+    <div class="tbl-section">
+      <div class="tbl-title"><span class="badge badge-leads">Leads</span> All Lead Campaign Runs <span style="color:var(--text-ter);font-weight:400;font-size:.72rem">(auto-detected from spend gaps &gt; 3 days)</span></div>
+      <div class="tbl-wrap"><table id="tblRuns"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+</div>
+
+<footer><div class="container">Aether Athletics Ad Performance · Powered by Leadly · Confidential</div></footer>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+let RAW = []; // all rows from sheet
+let CONFIG = { targetCPL: 50, leadsCampaignBudget: 2000, leadsCampaignDays: 21, activeWindowDays: 3 };
+let charts = {};
+let S = { type: 'all', period: '30d', cf: null, ct: null };
+
+// Format helpers
+const fmt = (n, p='$', d=2) => n == null || isNaN(n) ? '–' : p + Number(n).toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
+const fN = (n, d=0) => n == null || isNaN(n) ? '–' : Number(n).toLocaleString('en-US', { maximumFractionDigits: d });
+const fD = (ds) => { if (!ds) return ''; const [y,m,d] = ds.split('-'); const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${+d} ${mo[+m-1]}`; };
+const fDF = (ds) => { if (!ds) return ''; const [y,m,d] = ds.split('-'); const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']; return `${+d} ${mo[+m-1]} ${y}`; };
+const todayStr = () => new Date().toISOString().split('T')[0];
+const daysAgo = (n) => { const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().split('T')[0]; };
+const escHTML = (s) => !s ? '' : String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+
+// ===== DATA FETCH =====
+async function loadAll() {
+  const r = await fetch('/api/sheet-raw');
+  if (!r.ok) throw new Error(`Sheet load failed (${r.status})`);
+  const j = await r.json();
+  if (!j.ok) throw new Error(j.error || 'Sheet load returned not-ok');
+  RAW = j.rows || [];
+  if (j.config) CONFIG = { ...CONFIG, ...j.config };
+}
+
+// ===== DATE RANGE =====
+function getDateRange() {
+  if (S.period === 'custom' && S.cf && S.ct) return { from: S.cf, to: S.ct };
+  if (S.period === 'yesterday') return { from: daysAgo(1), to: daysAgo(1) };
+  if (S.period === '7d') return { from: daysAgo(7), to: todayStr() };
+  if (S.period === '30d') return { from: daysAgo(30), to: todayStr() };
+  if (S.period === '90d') return { from: daysAgo(90), to: todayStr() };
+  if (S.period === 'ytd') return { from: new Date().getFullYear() + '-01-01', to: todayStr() };
+  return { from: daysAgo(30), to: todayStr() };
+}
+
+function getPrevRange() {
+  const { from, to } = getDateRange();
+  const days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+  const pTo = new Date(new Date(from).getTime() - 86400000).toISOString().split('T')[0];
+  const pFrom = new Date(new Date(pTo).getTime() - (days-1) * 86400000).toISOString().split('T')[0];
+  return { from: pFrom, to: pTo };
+}
+
+// ===== FILTER ROWS =====
+function filterRows(from, to) {
+  return RAW.filter(r => {
+    if (r.Date < from || r.Date > to) return false;
+    if (S.type !== 'all' && r.Type !== S.type) return false;
+    return true;
+  });
+}
+
+function summarize(rows) {
+  return rows.reduce((s, r) => ({
+    spend: s.spend + r.Spend,
+    impressions: s.impressions + r.Impressions,
+    reach: Math.max(s.reach, r.Reach),
+    clicks: s.clicks + r.Clicks,
+    leads: s.leads + r.Leads,
+  }), { spend: 0, impressions: 0, reach: 0, clicks: 0, leads: 0 });
+}
+
+// ===== KPIs =====
+function renderKPIs() {
+  const { from, to } = getDateRange();
+  const cur = filterRows(from, to);
+  const t = summarize(cur);
+  const cpl = t.leads > 0 ? t.spend / t.leads : 0;
+  const ctr = t.impressions > 0 ? (t.clicks / t.impressions) * 100 : 0;
+  const cpc = t.clicks > 0 ? t.spend / t.clicks : 0;
+  const cpm = t.impressions > 0 ? (t.spend / t.impressions) * 1000 : 0;
+
+  // prev period for delta
+  const prev = getPrevRange();
+  const prevRows = RAW.filter(r => {
+    if (r.Date < prev.from || r.Date > prev.to) return false;
+    if (S.type !== 'all' && r.Type !== S.type) return false;
+    return true;
+  });
+  const p = summarize(prevRows);
+
+  const dl = (c, pv) => {
+    if (!pv || pv === 0) return { c: 'flat', t: '—' };
+    const v = ((c - pv) / pv * 100);
+    if (Math.abs(v) < 0.1) return { c: 'flat', t: '0%' };
+    return v > 0 ? { c: 'up', t: `+${v.toFixed(1)}%` } : { c: 'down', t: `${v.toFixed(1)}%` };
+  };
+  const bg = (d) => `<div class="kpi-badge ${d.c}">${d.t} <span class="vs">vs prev period</span></div>`;
+
+  const days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+  const sub = `${fD(from)} → ${fD(to)} · ${days}d`;
+
+  // CPL color: good if under target, bad if over
+  const cplClass = cpl > 0 && cpl > CONFIG.targetCPL ? 'kpi-val' : (cpl > 0 ? 'kpi-val' : 'kpi-val');
+
+  $('#kpis').innerHTML = `
+    <div class="kpi"><div class="kpi-lbl">Total Spend</div><div class="kpi-val">${fmt(t.spend)}</div><div class="kpi-sub">${sub}</div>${bg(dl(t.spend, p.spend))}</div>
+    <div class="kpi"><div class="kpi-lbl">Impressions</div><div class="kpi-val">${fN(t.impressions)}</div><div class="kpi-sub">Meta Ads delivered</div>${bg(dl(t.impressions, p.impressions))}</div>
+    <div class="kpi"><div class="kpi-lbl">Clicks</div><div class="kpi-val">${fN(t.clicks)}</div><div class="kpi-sub">Total link clicks</div>${bg(dl(t.clicks, p.clicks))}</div>
+    <div class="kpi"><div class="kpi-lbl">Leads</div><div class="kpi-val">${fN(t.leads)}</div><div class="kpi-sub">Lead-form submissions</div>${bg(dl(t.leads, p.leads))}</div>
+    <div class="kpi"><div class="kpi-lbl">Cost / Lead</div><div class="kpi-val">${t.leads > 0 ? fmt(cpl) : '—'}</div><div class="kpi-sub">Target ${fmt(CONFIG.targetCPL, '$', 0)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">CPC</div><div class="kpi-val">${t.clicks > 0 ? fmt(cpc) : '—'}</div><div class="kpi-sub">Cost / click</div></div>
+    <div class="kpi"><div class="kpi-lbl">CPM</div><div class="kpi-val">${t.impressions > 0 ? fmt(cpm) : '—'}</div><div class="kpi-sub">Cost / 1K impr.</div></div>
+    <div class="kpi"><div class="kpi-lbl">CTR</div><div class="kpi-val">${ctr.toFixed(2)}%</div><div class="kpi-sub">Clicks / impressions</div></div>
+  `;
+}
+
+// ===== ACTIVE LEAD CAMPAIGN DETECTION =====
+function detectLeadRuns() {
+  const leadRows = RAW.filter(r => r.Type === 'Leads' && r.Spend > 0);
+  const byCamp = new Map();
+  for (const r of leadRows) {
+    const k = r['Campaign ID'];
+    if (!byCamp.has(k)) byCamp.set(k, []);
+    byCamp.get(k).push(r);
+  }
+  const runs = [];
+  for (const [, days] of byCamp) {
+    days.sort((a, b) => a.Date < b.Date ? -1 : 1);
+    let cur = null;
+    for (const d of days) {
+      if (!cur) {
+        cur = newRun(d);
+      } else {
+        const gap = (new Date(d.Date) - new Date(cur.endDate)) / 86400000;
+        if (gap > 3) {
+          runs.push(finalize(cur));
+          cur = newRun(d);
+        } else {
+          cur.endDate = d.Date;
+        }
+      }
+      cur.spend += d.Spend;
+      cur.leads += d.Leads;
+      cur.impressions += d.Impressions;
+      cur.clicks += d.Clicks;
+      cur.reach = Math.max(cur.reach, d.Reach);
+    }
+    if (cur) runs.push(finalize(cur));
+  }
+  runs.sort((a, b) => a.startDate < b.startDate ? 1 : -1);
+  return runs;
+
+  function newRun(d) { return { campaignId: d['Campaign ID'], campaignName: d['Campaign Name'], startDate: d.Date, endDate: d.Date, spend: 0, leads: 0, impressions: 0, clicks: 0, reach: 0 }; }
+  function finalize(r) {
+    const start = new Date(r.startDate);
+    const end = new Date(r.endDate);
+    r.days = Math.round((end - start) / 86400000) + 1;
+    r.cpl = r.leads > 0 ? r.spend / r.leads : 0;
+    return r;
+  }
+}
+
+function renderActiveBanner() {
+  const runs = detectLeadRuns();
+  const el = $('#activeBanner');
+  if (!runs.length) {
+    el.innerHTML = '';
+    return;
+  }
+  const newest = runs[0];
+  const today = new Date();
+  const lastEnd = new Date(newest.endDate);
+  const daysSince = Math.floor((today - lastEnd) / 86400000);
+
+  if (daysSince <= CONFIG.activeWindowDays) {
+    // ACTIVE
+    const overTarget = newest.cpl > CONFIG.targetCPL;
+    const cplClass = newest.cpl > 0 ? (overTarget ? 'bad' : 'good') : '';
+    const spendPct = Math.min(100, (newest.spend / CONFIG.leadsCampaignBudget) * 100);
+    el.innerHTML = `
+      <div class="active-banner live">
+        <div class="ab-left">
+          <div class="ab-tag"><span class="ab-dot live"></span> Lead campaign live</div>
+          <div class="ab-headline">${escHTML(newest.campaignName)}</div>
+          <div class="ab-sub">Day ${newest.days} · started ${fDF(newest.startDate)}</div>
+          <div class="ab-progress">
+            <div class="ab-progress-track"><div class="ab-progress-fill" style="width:${spendPct}%"></div></div>
+            <div class="ab-progress-meta"><span>${fmt(newest.spend, '$', 0)} spent</span><span>${fmt(CONFIG.leadsCampaignBudget, '$', 0)} target · ${spendPct.toFixed(0)}%</span></div>
+          </div>
+        </div>
+        <div class="ab-right">
+          <div class="ab-stat"><div class="ab-stat-label">Leads</div><div class="ab-stat-val">${newest.leads}</div><div class="ab-stat-sub">${fmt(newest.spend / newest.days, '$', 0)}/day</div></div>
+          <div class="ab-stat"><div class="ab-stat-label">Cost / Lead</div><div class="ab-stat-val ${cplClass}">${newest.cpl > 0 ? fmt(newest.cpl) : '—'}</div><div class="ab-stat-sub">target ${fmt(CONFIG.targetCPL, '$', 0)}</div></div>
+        </div>
+      </div>
+    `;
+  } else {
+    // PAUSED — show last campaign
+    const overTarget = newest.cpl > CONFIG.targetCPL;
+    const cplClass = newest.cpl > 0 ? (overTarget ? 'bad' : 'good') : '';
+    el.innerHTML = `
+      <div class="active-banner idle">
+        <div class="ab-left">
+          <div class="ab-tag"><span class="ab-dot idle"></span> No lead campaign running</div>
+          <div class="ab-headline">Paused — last ran ${daysSince} days ago</div>
+          <div class="ab-sub">"${escHTML(newest.campaignName)}" · ${fD(newest.startDate)} → ${fD(newest.endDate)}</div>
+        </div>
+        <div class="ab-right">
+          <div class="ab-stat"><div class="ab-stat-label">Last · Leads</div><div class="ab-stat-val">${newest.leads}</div><div class="ab-stat-sub">over ${newest.days} days</div></div>
+          <div class="ab-stat"><div class="ab-stat-label">Last · CPL</div><div class="ab-stat-val ${cplClass}">${newest.cpl > 0 ? fmt(newest.cpl) : '—'}</div><div class="ab-stat-sub">target ${fmt(CONFIG.targetCPL, '$', 0)}</div></div>
+        </div>
+      </div>
+    `;
+  }
+}
+
+// ===== AGGREGATE BY DATE =====
+function aggregateByDate(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.Date)) map.set(r.Date, { date: r.Date, spend: 0, impressions: 0, reach: 0, clicks: 0, leads: 0 });
+    const a = map.get(r.Date);
+    a.spend += r.Spend;
+    a.impressions += r.Impressions;
+    a.reach += r.Reach;
+    a.clicks += r.Clicks;
+    a.leads += r.Leads;
+  }
+  return Array.from(map.values()).map(a => ({
+    ...a,
+    cpl: a.leads > 0 ? a.spend / a.leads : 0,
+    ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : 0,
+  })).sort((a, b) => a.date < b.date ? -1 : 1);
+}
+
+// ===== CHARTS =====
+const cDef = {
+  responsive: true, maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, padding: 14, font: { family: 'Outfit', size: 11.5 } } }, tooltip: { backgroundColor: '#1b2130', titleFont: { family: 'Outfit' }, bodyFont: { family: 'IBM Plex Mono', size: 11.5 }, padding: 10, cornerRadius: 8 } },
+  scales: { x: { grid: { display: false }, ticks: { font: { family: 'Outfit', size: 10.5 }, maxRotation: 45 } }, y: { grid: { color: '#eef0f3' }, ticks: { font: { family: 'IBM Plex Mono', size: 10.5 } } } }
+};
+
+function mc(id, type, data, o={}) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const m = JSON.parse(JSON.stringify(cDef));
+  if (o.scales) Object.assign(m.scales, o.scales);
+  if (o.plugins) for (const k in o.plugins) m.plugins[k] = { ...(m.plugins[k] || {}), ...o.plugins[k] };
+  if (o.maintainAspectRatio !== undefined) m.maintainAspectRatio = o.maintainAspectRatio;
+  if (o.indexAxis) m.indexAxis = o.indexAxis;
+  if (o.elements) m.elements = o.elements;
+  charts[id] = new Chart(ctx.getContext('2d'), { type, data, options: m });
+}
+
+function renderInsights() {
+  const { from, to } = getDateRange();
+  const cur = filterRows(from, to);
+
+  const baRows = cur.filter(r => r.Type === 'BA');
+  const leadsRows = cur.filter(r => r.Type === 'Leads');
+  const otherRows = cur.filter(r => r.Type === 'Other');
+
+  const sBA = summarize(baRows);
+  const sLeads = summarize(leadsRows);
+  const sOther = summarize(otherRows);
+
+  const cpl = sLeads.leads > 0 ? sLeads.spend / sLeads.leads : 0;
+  const overTarget = cpl > 0 && cpl > CONFIG.targetCPL;
+
+  // 3 big cards
+  $('#insLeadsTotal').textContent = fN(sLeads.leads);
+  $('#insLeadsSub').textContent = `from ${fmt(sLeads.spend, '$', 0)} lead spend`;
+  $('#insCPL').textContent = sLeads.leads > 0 ? fmt(cpl) : '—';
+  $('#insCPL').className = 'ic-big ' + (sLeads.leads > 0 ? (overTarget ? 'bad' : 'good') : '');
+  $('#insCPLSub').textContent = `target ${fmt(CONFIG.targetCPL, '$', 0)} · ${cpl > 0 ? (overTarget ? 'over' : 'under') + ' target' : 'no leads yet'}`;
+  $('#insReach').textContent = sBA.reach >= 1000 ? fN(Math.round(sBA.reach / 1000)) + 'K' : fN(sBA.reach);
+  $('#insReachSub').textContent = `${fN(sBA.impressions)} BA impressions`;
+
+  // Daily aggregates per type
+  const dailyAll = aggregateByDate(cur);
+  const dailyBA = aggregateByDate(baRows);
+  const dailyLeads = aggregateByDate(leadsRows);
+  const dates = dailyAll.map(d => d.date);
+  const labels = dates.map(fD);
+
+  // Mini sparklines
+  const miniOpts = {
+    scales: { x: { display: false }, y: { display: false } },
+    plugins: { legend: { display: false }, tooltip: { enabled: false } },
+    elements: { point: { radius: 0 } },
+    responsive: true, maintainAspectRatio: false,
+  };
+  // Build data arrays aligned to `dates`
+  const baMap = new Map(dailyBA.map(d => [d.date, d]));
+  const leadsMap = new Map(dailyLeads.map(d => [d.date, d]));
+
+  mc('cMiniLeads', 'line', { labels, datasets: [{ data: dates.map(d => leadsMap.get(d)?.leads || 0), borderColor: '#0d7c5f', backgroundColor: '#0d7c5f22', fill: true, tension: .4, borderWidth: 2 }] }, miniOpts);
+  mc('cMiniCPL', 'line', { labels, datasets: [{ data: dates.map(d => { const r = leadsMap.get(d); return r && r.leads > 0 ? r.cpl : null; }), borderColor: '#e09818', backgroundColor: '#e0981822', fill: true, tension: .4, borderWidth: 2, spanGaps: true }] }, miniOpts);
+  mc('cMiniReach', 'line', { labels, datasets: [{ data: dates.map(d => baMap.get(d)?.reach || 0), borderColor: '#7c5dd9', backgroundColor: '#7c5dd922', fill: true, tension: .4, borderWidth: 2 }] }, miniOpts);
+
+  // Daily spend stacked
+  mc('cSpendByType', 'bar', {
+    labels,
+    datasets: [
+      { label: 'BA', data: dates.map(d => baMap.get(d)?.spend || 0), backgroundColor: '#7c5dd9', borderRadius: 4 },
+      { label: 'Leads', data: dates.map(d => leadsMap.get(d)?.spend || 0), backgroundColor: '#0d7c5f', borderRadius: 4 },
+    ]
+  }, {
+    scales: {
+      x: { stacked: true, grid: { display: false }, ticks: { font: { family: 'Outfit', size: 10 } } },
+      y: { stacked: true, grid: { color: '#eef0f3' }, ticks: { font: { family: 'IBM Plex Mono', size: 10 }, callback: (v) => '$' + v } }
+    }
+  });
+
+  // Spend allocation donut
+  const spendData = [];
+  const spendLabels = [];
+  const spendColors = [];
+  if (sLeads.spend > 0) { spendLabels.push('Leads'); spendData.push(Math.round(sLeads.spend * 100) / 100); spendColors.push('#0d7c5f'); }
+  if (sBA.spend > 0) { spendLabels.push('Brand Awareness'); spendData.push(Math.round(sBA.spend * 100) / 100); spendColors.push('#7c5dd9'); }
+  if (sOther.spend > 0) { spendLabels.push('Other'); spendData.push(Math.round(sOther.spend * 100) / 100); spendColors.push('#8f96a3'); }
+
+  mc('cBudget', 'doughnut', {
+    labels: spendLabels,
+    datasets: [{ data: spendData, backgroundColor: spendColors, borderWidth: 3, borderColor: '#fff', hoverOffset: 8 }]
+  }, {
+    maintainAspectRatio: true,
+    scales: { x: { display: false }, y: { display: false } },
+    plugins: { legend: { position: 'bottom', labels: { padding: 14, usePointStyle: true, font: { family: 'Outfit', size: 11 } } }, tooltip: { callbacks: { label: ctx => ' ' + ctx.label + ': $' + ctx.parsed.toLocaleString('en-US', { minimumFractionDigits: 2 }) } } }
+  });
+
+  // Daily Leads + CPL combo with target line
+  const targetLine = dates.map(() => CONFIG.targetCPL);
+  mc('cLeadsCPL', 'bar', {
+    labels,
+    datasets: [
+      { type: 'bar', label: 'Leads', data: dates.map(d => leadsMap.get(d)?.leads || 0), backgroundColor: '#0d7c5f', borderRadius: 4, yAxisID: 'y' },
+      { type: 'line', label: 'CPL', data: dates.map(d => { const r = leadsMap.get(d); return r && r.leads > 0 ? r.cpl : null; }), borderColor: '#e09818', backgroundColor: '#e09818', borderWidth: 2, tension: .3, pointRadius: 3, yAxisID: 'y1', spanGaps: true },
+      { type: 'line', label: 'Target CPL', data: targetLine, borderColor: '#d94545', borderDash: [6, 4], borderWidth: 1.5, pointRadius: 0, yAxisID: 'y1' }
+    ]
+  }, {
+    scales: {
+      x: { grid: { display: false }, ticks: { font: { family: 'Outfit', size: 10 } } },
+      y: { position: 'left', grid: { color: '#eef0f3' }, ticks: { font: { family: 'IBM Plex Mono', size: 10 } }, beginAtZero: true, title: { display: true, text: 'Leads', font: { family: 'Outfit', size: 10 } } },
+      y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: { family: 'IBM Plex Mono', size: 10 }, callback: (v) => '$' + v }, beginAtZero: true, title: { display: true, text: 'CPL', font: { family: 'Outfit', size: 10 } } }
+    }
+  });
+
+  // Performance cards
+  // Best/worst lead campaign in period
+  const campMap = new Map();
+  for (const r of leadsRows) {
+    const k = r['Campaign ID'];
+    if (!campMap.has(k)) campMap.set(k, { campaignId: k, campaignName: r['Campaign Name'], spend: 0, leads: 0, days: new Set() });
+    const c = campMap.get(k);
+    c.spend += r.Spend;
+    c.leads += r.Leads;
+    if (r.Spend > 0) c.days.add(r.Date);
+  }
+  const leadCamps = Array.from(campMap.values()).map(c => ({ ...c, days: c.days.size, cpl: c.leads > 0 ? c.spend / c.leads : 0 })).filter(c => c.leads > 0);
+  leadCamps.sort((a, b) => a.cpl - b.cpl);
+  const best = leadCamps[0];
+  const worst = leadCamps[leadCamps.length - 1];
+  const mostLeads = [...leadCamps].sort((a, b) => b.leads - a.leads)[0];
+
+  // Top reach BA campaign
+  const baMap2 = new Map();
+  for (const r of baRows) {
+    const k = r['Campaign ID'];
+    if (!baMap2.has(k)) baMap2.set(k, { campaignId: k, campaignName: r['Campaign Name'], spend: 0, reach: 0 });
+    const c = baMap2.get(k);
+    c.spend += r.Spend;
+    c.reach = Math.max(c.reach, r.Reach);
+  }
+  const baCamps = Array.from(baMap2.values()).filter(c => c.reach > 0);
+  const topReach = baCamps.sort((a, b) => b.reach - a.reach)[0];
+
+  let perfHTML = '';
+  if (best) perfHTML += `<div class="perf-card" style="border-left:3px solid var(--leads)"><div class="perf-label">🏆 Best CPL (Leads)</div><div class="perf-name" style="color:var(--leads)" title="${escHTML(best.campaignName)}">${escHTML(best.campaignName)}</div><div class="perf-val">${fmt(best.cpl)} per lead</div><div class="perf-sub">${best.leads} leads · $${fN(best.spend, 0)} spent</div></div>`;
+  if (mostLeads && mostLeads !== best) perfHTML += `<div class="perf-card" style="border-left:3px solid var(--leads)"><div class="perf-label">📈 Most Leads</div><div class="perf-name" style="color:var(--leads)" title="${escHTML(mostLeads.campaignName)}">${escHTML(mostLeads.campaignName)}</div><div class="perf-val">${mostLeads.leads} leads</div><div class="perf-sub">${fmt(mostLeads.cpl)} avg CPL</div></div>`;
+  if (worst && worst !== best && leadCamps.length > 1) perfHTML += `<div class="perf-card" style="border-left:3px solid var(--red)"><div class="perf-label">⚠️ Highest CPL</div><div class="perf-name" style="color:var(--red)" title="${escHTML(worst.campaignName)}">${escHTML(worst.campaignName)}</div><div class="perf-val">${fmt(worst.cpl)} per lead</div><div class="perf-sub">${worst.leads} leads · $${fN(worst.spend, 0)} spent</div></div>`;
+  if (topReach) perfHTML += `<div class="perf-card" style="border-left:3px solid var(--ba)"><div class="perf-label">📡 Top BA Reach</div><div class="perf-name" style="color:var(--ba)" title="${escHTML(topReach.campaignName)}">${escHTML(topReach.campaignName)}</div><div class="perf-val">${fN(topReach.reach)} people</div><div class="perf-sub">$${fN(topReach.spend, 0)} spent</div></div>`;
+
+  $('#insPerfCards').innerHTML = perfHTML;
+}
+
+// ===== TABLES =====
+function aggregateCampaigns(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    const k = r['Campaign ID'];
+    if (!map.has(k)) {
+      map.set(k, {
+        campaignId: r['Campaign ID'], campaignName: r['Campaign Name'],
+        type: r.Type, status: r.Status,
+        spend: 0, impressions: 0, reach: 0, clicks: 0, leads: 0,
+        days: new Map() // date → row
+      });
+    }
+    const c = map.get(k);
+    c.spend += r.Spend;
+    c.impressions += r.Impressions;
+    c.reach = Math.max(c.reach, r.Reach);
+    c.clicks += r.Clicks;
+    c.leads += r.Leads;
+    c.days.set(r.Date, r);
+  }
+  return Array.from(map.values()).map(c => ({
+    ...c,
+    activeDays: Array.from(c.days.values()).filter(d => d.Spend > 0).length,
+    days: Array.from(c.days.values()).sort((a, b) => b.Date < a.Date ? -1 : 1),
+    cpl: c.leads > 0 ? c.spend / c.leads : 0,
+    ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
+    cpc: c.clicks > 0 ? c.spend / c.clicks : 0,
+    cpm: c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0,
+  })).sort((a, b) => b.spend - a.spend);
+}
+
+function renderTables() {
+  const { from, to } = getDateRange();
+  const cur = filterRows(from, to);
+
+  const leadsRows = cur.filter(r => r.Type === 'Leads');
+  const baRows = cur.filter(r => r.Type === 'BA');
+  const otherRows = cur.filter(r => r.Type === 'Other');
+
+  // Show/hide sections based on type filter
+  $('#leadsSection').style.display = (S.type === 'all' || S.type === 'Leads') && leadsRows.length ? '' : 'none';
+  $('#baSection').style.display = (S.type === 'all' || S.type === 'BA') && baRows.length ? '' : 'none';
+  $('#otherSection').style.display = (S.type === 'all' || S.type === 'Other') && otherRows.length ? '' : 'none';
+
+  // LEADS TABLE
+  const leadsCamps = aggregateCampaigns(leadsRows);
+  const hLeads = `<tr><th>Campaign</th><th>Status</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">Clicks</th><th class="num">Impr.</th><th class="num">CTR</th></tr>`;
+  let bLeads = '';
+  for (const c of leadsCamps) {
+    const overT = c.cpl > CONFIG.targetCPL;
+    const cplCls = c.cpl > 0 ? (overT ? 'bad' : 'good') : '';
+    const stBadge = c.activeDays > 0 ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-paused">Paused</span>`;
+    bLeads += `<tr class="camp-row" data-camp="L-${c.campaignId}"><td class="cname" title="${escHTML(c.campaignName)}">${escHTML(c.campaignName)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${c.leads}</td><td class="num ${cplCls}">${c.cpl > 0 ? fmt(c.cpl) : '–'}</td><td class="num">${fN(c.clicks)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${c.ctr.toFixed(2)}%</td></tr>`;
+    for (const d of c.days) {
+      const dCpl = d.Leads > 0 ? d.Spend / d.Leads : 0;
+      const dCplCls = dCpl > 0 ? (dCpl > CONFIG.targetCPL ? 'bad' : 'good') : '';
+      bLeads += `<tr class="day-row" data-parent="L-${c.campaignId}"><td>${fD(d.Date)}</td><td></td><td></td><td class="num">${fmt(d.Spend)}</td><td class="num">${d.Leads}</td><td class="num ${dCplCls}">${dCpl > 0 ? fmt(dCpl) : '–'}</td><td class="num">${fN(d.Clicks)}</td><td class="num">${fN(d.Impressions)}</td><td class="num">${d.CTR.toFixed(2)}%</td></tr>`;
+    }
+  }
+  $('#tblLeads thead').innerHTML = hLeads;
+  $('#tblLeads tbody').innerHTML = bLeads || `<tr><td colspan="9" class="tbl-empty">No lead campaigns in this period</td></tr>`;
+
+  // BA TABLE
+  const baCamps = aggregateCampaigns(baRows);
+  const hBA = `<tr><th>Campaign</th><th>Status</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Reach</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">CTR</th><th class="num">CPM</th></tr>`;
+  let bBA = '';
+  for (const c of baCamps) {
+    const stBadge = c.activeDays > 0 ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-paused">Paused</span>`;
+    bBA += `<tr class="camp-row" data-camp="B-${c.campaignId}"><td class="cname" title="${escHTML(c.campaignName)}">${escHTML(c.campaignName)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${fN(c.reach)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${fN(c.clicks)}</td><td class="num">${c.ctr.toFixed(2)}%</td><td class="num">${fmt(c.cpm)}</td></tr>`;
+    for (const d of c.days) {
+      bBA += `<tr class="day-row" data-parent="B-${c.campaignId}"><td>${fD(d.Date)}</td><td></td><td></td><td class="num">${fmt(d.Spend)}</td><td class="num">${fN(d.Reach)}</td><td class="num">${fN(d.Impressions)}</td><td class="num">${fN(d.Clicks)}</td><td class="num">${d.CTR.toFixed(2)}%</td><td class="num">${fmt(d.CPM)}</td></tr>`;
+    }
+  }
+  $('#tblBA thead').innerHTML = hBA;
+  $('#tblBA tbody').innerHTML = bBA || `<tr><td colspan="9" class="tbl-empty">No brand awareness campaigns in this period</td></tr>`;
+
+  // OTHER TABLE
+  if (otherRows.length) {
+    const otherCamps = aggregateCampaigns(otherRows);
+    const hO = `<tr><th>Campaign</th><th>Status</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">Leads</th><th class="num">CTR</th></tr>`;
+    let bO = '';
+    for (const c of otherCamps) {
+      const stBadge = c.activeDays > 0 ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-paused">Paused</span>`;
+      bO += `<tr class="camp-row" data-camp="O-${c.campaignId}"><td class="cname" title="${escHTML(c.campaignName)}">${escHTML(c.campaignName)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${fN(c.clicks)}</td><td class="num">${c.leads}</td><td class="num">${c.ctr.toFixed(2)}%</td></tr>`;
+      for (const d of c.days) {
+        bO += `<tr class="day-row" data-parent="O-${c.campaignId}"><td>${fD(d.Date)}</td><td></td><td></td><td class="num">${fmt(d.Spend)}</td><td class="num">${fN(d.Impressions)}</td><td class="num">${fN(d.Clicks)}</td><td class="num">${d.Leads}</td><td class="num">${d.CTR.toFixed(2)}%</td></tr>`;
+      }
+    }
+    $('#tblOther thead').innerHTML = hO;
+    $('#tblOther tbody').innerHTML = bO;
+  }
+
+  bindExpand();
+}
+
+function bindExpand() {
+  $$('.camp-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = row.dataset.camp;
+      const open = row.classList.toggle('expanded');
+      $$(`.day-row[data-parent="${id}"]`).forEach(d => d.classList.toggle('show', open));
+    });
+  });
+}
+
+// ===== LEAD RUNS TABLE =====
+function renderRunsTable() {
+  const runs = detectLeadRuns();
+  const t = $('#tblRuns');
+  t.querySelector('thead').innerHTML = `<tr><th>Campaign</th><th>Started</th><th>Ended</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">vs Target</th></tr>`;
+  if (!runs.length) {
+    t.querySelector('tbody').innerHTML = `<tr><td colspan="8" class="tbl-empty">No lead campaign runs detected</td></tr>`;
+    return;
+  }
+  const rows = runs.map(r => {
+    const overT = r.cpl > CONFIG.targetCPL;
+    const cplCls = r.cpl > 0 ? (overT ? 'bad' : 'good') : '';
+    const vsT = r.cpl > 0
+      ? `<span class="${overT ? 'bad' : 'good'}">${overT ? '+' : ''}${(((r.cpl - CONFIG.targetCPL) / CONFIG.targetCPL) * 100).toFixed(0)}%</span>`
+      : '–';
+    return `<tr><td class="cname" title="${escHTML(r.campaignName)}">${escHTML(r.campaignName)}</td><td>${fD(r.startDate)}</td><td>${fD(r.endDate)}</td><td class="num">${r.days}</td><td class="num">${fmt(r.spend)}</td><td class="num">${r.leads}</td><td class="num ${cplCls}">${r.cpl > 0 ? fmt(r.cpl) : '–'}</td><td class="num">${vsT}</td></tr>`;
+  }).join('');
+  t.querySelector('tbody').innerHTML = rows;
+}
+
+function renderTag() {
+  const { from, to } = getDateRange();
+  const days = Math.round((new Date(to) - new Date(from)) / 86400000) + 1;
+  $('#periodTag').textContent = fDF(from) + ' → ' + fDF(to) + ' · ' + days + 'd';
+}
+
+function renderAll() {
+  renderTag();
+  renderActiveBanner();
+  renderKPIs();
+  renderInsights();
+  renderTables();
+  renderRunsTable();
+}
+
+// ===== EVENT BINDINGS =====
+function bindPills(id, key) {
+  $$(`#${id} .pill`).forEach(b => b.addEventListener('click', () => {
+    $$(`#${id} .pill`).forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    S[key] = b.dataset.v;
+    renderAll();
+  }));
+}
+bindPills('typeFilter', 'type');
+
+$$('#periodFilter .pill').forEach(b => b.addEventListener('click', () => {
+  const drp = $('#drpRow');
+  if (b.dataset.v === 'custom') {
+    drp.classList.toggle('open');
+    if (drp.classList.contains('open')) {
+      $$('#periodFilter .pill').forEach(x => x.classList.remove('on'));
+      b.classList.add('on');
+    }
+    return;
+  }
+  drp.classList.remove('open');
+  $$('#periodFilter .pill').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  S.period = b.dataset.v;
+  S.cf = null; S.ct = null;
+  renderAll();
+}));
+
+$('#drpApply').addEventListener('click', () => {
+  const f = $('#drpFrom').value, t = $('#drpTo').value;
+  if (!f || !t) { alert('Pick both dates'); return; }
+  if (f > t) { alert('Start must be before end'); return; }
+  S.period = 'custom';
+  S.cf = f; S.ct = t;
+  const cb = $('#customBtn');
+  cb.textContent = fDF(f).slice(0, -5) + ' – ' + fDF(t).slice(0, -5);
+  $$('#periodFilter .pill').forEach(x => x.classList.remove('on'));
+  cb.classList.add('on');
+  renderAll();
+});
+
+$$('.tab').forEach(b => b.addEventListener('click', () => {
+  $$('.tab').forEach(x => x.classList.remove('on'));
+  $$('.tp').forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  $('#tp-' + b.dataset.t).classList.add('on');
+  if (b.dataset.t === 'insights') setTimeout(() => renderInsights(), 50);
+}));
+
+// ===== INIT =====
+(async () => {
+  const ov = $('#loadingOverlay');
+  try {
+    await loadAll();
+    if (!RAW.length) {
+      ov.innerHTML = `<div class="load-error"><strong>No data in sheet yet</strong><br>Hit <code>/api/daily-pull</code> or <code>/api/backfill</code> first to seed the sheet.<br><br><a href="/" style="display:inline-block;padding:8px 20px;background:var(--green);color:#fff;border-radius:6px;text-decoration:none;font-family:inherit;font-weight:600">Open Pipeline Control</a></div>`;
+      return;
+    }
+    ov.classList.add('hidden');
+    setTimeout(() => ov.remove(), 350);
+    renderAll();
+  } catch (e) {
+    ov.innerHTML = `<div class="load-error"><strong>Failed to load</strong><br>${e.message}<br><br><button onclick="location.reload()" style="padding:8px 20px;border:none;background:var(--green);color:#fff;border-radius:6px;cursor:pointer;font-family:inherit;font-weight:600">Retry</button></div>`;
+  }
+})();
+</script>
+</body>
+</html>
