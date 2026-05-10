@@ -1,117 +1,100 @@
-# Aether Athletics — Ad Pipeline
+# Aether Athletics — Ad Pipeline (Ad Level)
 
-Daily Meta Ads pull → Google Sheets → Telegram briefing → live dashboard.
+Daily Meta Ads pull (at **ad creative level**) → Google Sheets → Telegram briefing → live dashboard.
 
-Distinguishes **Brand Awareness (BA)** vs **Lead-gen** campaigns automatically.
+Distinguishes **Brand Awareness (BA)** vs **Lead-gen** campaigns automatically by name pattern.
 
 ## What this does
 
-- **7:00am SGT** — pulls yesterday's campaign-level Meta Ads data, writes to sheet
-- **7:30am SGT** — generates AI briefing (gym-owner voice), posts to Telegram
-- **Dashboard** at `/` — live performance view with status banner, KPIs, charts, campaign breakdowns
+- **7:00am SGT** — pulls yesterday's **ad-level** Meta data (one row per ad per day), writes to sheet
+- **7:30am SGT** — generates AI briefing (gym-owner voice, rolled up to campaign level), posts to Telegram
+- **Dashboard** at `/dashboard.html` — live performance view: KPIs, sparklines, campaign / ad set / ad tables
 
 ## Architecture
 
 ```
-Meta Ads API → /api/daily-pull → Google Sheet (META RAW tab)
-                                    ↓
-                              /api/dashboard-data
-                                    ↓
-                              public/index.html (live dashboard)
-
-Google Sheet → /api/daily-insight → Anthropic → Telegram
+Meta Ads API (level=ad) → /api/daily-pull → Google Sheet (META RAW tab, 20 cols)
+Manual CSV export       → /api/import-csv → same sheet
+Google Sheet            → /api/sheet-raw  → public/dashboard.html
+Google Sheet            → /api/daily-insight → Anthropic → Telegram
 ```
+
+## Sheet schema — META RAW (20 columns)
+
+| # | Column |
+|---|---|
+| 1 | Date |
+| 2 | Campaign ID |
+| 3 | Campaign Name |
+| 4 | Ad Set ID |
+| 5 | Ad Set Name |
+| 6 | Ad ID |
+| 7 | Ad Name |
+| 8 | Objective |
+| 9 | Type (BA / Leads / Other) |
+| 10 | Status |
+| 11 | Spend |
+| 12 | Impressions |
+| 13 | Reach |
+| 14 | Frequency |
+| 15 | Clicks |
+| 16 | CPM |
+| 17 | CTR |
+| 18 | CPC |
+| 19 | Leads |
+| 20 | Cost Per Lead |
+
+**Upsert key:** `Date` + `Ad ID` (cols A + F).
+
+## Lead counting (3 non-overlapping action types)
+
+Each lead = sum of:
+1. `lead` — Meta lead form submissions
+2. `offsite_conversion.fb_pixel_lead` — pixel-tracked website leads (LEADSWEB)
+3. `onsite_conversion.messaging_conversation_started_7d` — WA / Messenger conversations
+
+No double-counting from `lead_grouped` or `leadgen.other`.
+
+## Type classifier (name-based, regex)
+
+| Match | Type |
+|---|---|
+| `^KEEPOFF_` | Other (excluded from charts) |
+| `_LEADS[A-Z]*_` (LEADS, LEADSWA, LEADSMESSENGER, LEADSWEB) | Leads |
+| `_BA_`, `_ENGAGEMENT_`, `_PPE_` | BA |
+| else | falls back to Meta objective; else `Other` |
 
 ## Env vars (Netlify → Site config → Environment variables)
 
 | Variable | Description |
 |---|---|
 | `META_ACCESS_TOKEN` | System user token from Meta Business |
-| `META_AD_ACCOUNT_ID` | Format `act_123456789` |
-| `GOOGLE_SHEET_ID` | From the sheet URL |
+| `META_AD_ACCOUNT_ID` | Format `act_123456789` (auto-normalized) |
+| `GOOGLE_SHEET_ID` | The sheet's ID from its URL |
 | `GOOGLE_SA_CLIENT_EMAIL` | Service account email |
-| `GOOGLE_SA_PRIVATE_KEY` | Paste `private_key` value from JSON (with `\n` literals) |
-| `ANTHROPIC_API_KEY` | Reuse from AARO |
-| `TELEGRAM_BOT_TOKEN` | New bot for AA |
-| `TELEGRAM_CHAT_ID` | Negative for groups, positive for DM |
-| `TARGET_CPL` | Target cost per lead (default `50`) |
-| `LEADS_CAMPAIGN_BUDGET` | Typical budget per Lead campaign (default `2000`) |
-| `LEADS_CAMPAIGN_DAYS` | Typical Lead campaign duration (default `21`) |
-| `DASHBOARD_URL` | (optional) Full dashboard URL — adds link to TG briefing |
+| `GOOGLE_SA_PRIVATE_KEY` | Service account private key |
+| `ANTHROPIC_API_KEY` | For daily Telegram briefings |
+| `TELEGRAM_BOT_TOKEN` | Bot to post briefings |
+| `TELEGRAM_CHAT_ID` | Chat to post into |
+| `TARGET_CPL` | $ threshold for green/red CPL coloring (default 50) |
+| `LEADS_CAMPAIGN_BUDGET` | Default campaign budget (e.g. 2000) |
+| `LEADS_CAMPAIGN_DAYS` | Default campaign run length (e.g. 21) |
+| `DASHBOARD_URL` | Public URL for "View dashboard →" link in Telegram |
 
-## Endpoints
+## Backfill
 
-| URL | Purpose |
-|---|---|
-| `/` | Live dashboard |
-| `/api/diagnostic` | Verify all env vars + API connections |
-| `/api/daily-pull` | Pull yesterday now |
-| `/api/daily-pull?date=2026-05-01` | Pull a specific date |
-| `/api/backfill?start=2026-01-01&end=2026-05-05` | Backfill a range |
-| `/api/dashboard-data` | JSON endpoint feeding the dashboard |
-| `/api/dashboard-data?days=7` | Last 7 days |
-| `/api/dashboard-data?start=2026-04-01&end=2026-05-01` | Custom range |
-| `/api/daily-insight?preview=true` | Preview Telegram message (no send) |
-| `/api/daily-insight` | Generate + send briefing now |
+**Option A — CSV import (recommended for historical data)**
+1. Meta Ads Manager → top tabs **Ads** → Date range = Maximum
+2. Top-right → **Breakdown** → By Time → **Day**
+3. **Columns** → Customize: Ad name, Ad ID, Ad set name, Ad set ID, Campaign name, Campaign ID, Objective, Delivery, Amount spent, Impressions, Reach, Frequency, Link clicks, CPM, CTR, CPC, Leads, Messaging conversations started
+4. **Reports** → Export → CSV
+5. Admin page → **Import from Meta CSV** → select file → Import
 
-## Sheet schema
+**Option B — API backfill (slower, has attribution lag)**
+- Admin page → **Backfill date range** → set From/To → Start
 
-Tab: `META RAW` — auto-created on first run. One row per campaign per day.
+## Daily ops
 
-| Date | Campaign ID | Campaign Name | Objective | Type | Status | Spend | Impressions | Reach | Frequency | Clicks | CPM | CTR | CPC | Leads | Cost Per Lead |
-|------|------|------|------|------|------|------|------|------|------|------|------|------|------|------|------|
-
-**Type** is auto-classified:
-- `BA` — REACH, BRAND_AWARENESS, ENGAGEMENT, TRAFFIC, VIDEO_VIEWS, PAGE_LIKES, LINK_CLICKS objectives
-- `Leads` — LEAD_GENERATION, OUTCOME_LEADS, CONVERSIONS, MESSAGES, OUTCOME_SALES objectives
-- `Other` — anything else
-
-If classification looks off, edit `OBJECTIVE_MAP` in `netlify/functions/config.js`.
-
-## Lead-gen "campaign run" detection
-
-The dashboard auto-detects discrete Lead campaign runs from spend patterns:
-- Same campaign ID + contiguous days of spend (gaps ≤ 3 days)
-- A gap > 3 days = new run
-- Active = had spend in the last 3 days
-
-Past runs show in the **Lead Campaign History** tab. The current active run shows in the **status banner** at the top.
-
-## Deploy
-
-1. Push to GitHub
-2. Netlify → Import existing project → pick repo → deploy (defaults are fine)
-3. Add env vars
-4. Trigger redeploy
-5. Hit `/api/diagnostic` to verify
-6. Hit `/api/daily-pull` for first data
-7. Optional: hit `/api/backfill?start=YYYY-MM-DD&end=YYYY-MM-DD` for history
-8. Visit `/` for the dashboard
-
-## File layout
-
-```
-aa-pipeline/
-├── netlify.toml
-├── package.json
-├── public/
-│   └── index.html              ← Dashboard (frontend)
-└── netlify/functions/
-    ├── config.js               ← env vars, classifier, helpers
-    ├── meta-fetcher.js         ← campaign-level Meta pull
-    ├── sheets-writer.js        ← write to Google Sheets
-    ├── daily-pull.js           ← scheduled 7am SGT
-    ├── daily-insight.js        ← scheduled 7:30am SGT (Telegram)
-    ├── backfill.js             ← manual: date range pull
-    ├── dashboard-data.js       ← JSON API for frontend
-    └── diagnostic.js           ← verify env vars
-```
-
-## Difference from AARO
-
-- **Single platform** (Meta only — no Google Ads)
-- **Campaign-level data** (vs account-level for AARO Meta)
-- **BA/Leads classification** (gym client uses two distinct campaign types)
-- **Status-aware dashboard** with active campaign banner + progress bar
-- **Lead campaign run history** (auto-detected from spend gaps)
-- **Gym-owner Telegram voice** (punchy, target-aware)
+- 7:00am SGT: scheduled `daily-pull` runs automatically (Netlify cron `0 23 * * *` UTC)
+- 7:30am SGT: scheduled `daily-insight` runs (Netlify cron `30 23 * * *` UTC)
+- Dashboard auto-fetches from sheet on each page load

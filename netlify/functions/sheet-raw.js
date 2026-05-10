@@ -18,13 +18,15 @@ exports.handler = async () => {
     }
 
     const headers = rows[0];
+    const NUMERIC_COLS = new Set([
+      "Spend", "Impressions", "Reach", "Frequency", "Clicks",
+      "CPM", "CTR", "CPC", "Leads", "Cost Per Lead",
+    ]);
     const data = rows.slice(1).map((r) => {
       const obj = {};
       headers.forEach((h, i) => {
         const v = r[i];
-        if (
-          ["Spend", "Impressions", "Reach", "Frequency", "Clicks", "CPM", "CTR", "CPC", "Leads", "Cost Per Lead"].includes(h)
-        ) {
+        if (NUMERIC_COLS.has(h)) {
           obj[h] = parseFloat(v) || 0;
         } else {
           obj[h] = v || "";

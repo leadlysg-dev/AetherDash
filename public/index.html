@@ -157,6 +157,25 @@ html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-hei
     <div class="result" id="pullResult"></div>
   </div>
 
+  <!-- IMPORT FROM CSV -->
+  <div class="card">
+    <div class="card-head">
+      <div class="card-title">Import from Meta CSV</div>
+      <span class="card-badge badge-manual">Manual</span>
+    </div>
+    <div class="card-desc">
+      Upload a CSV exported from Meta Ads Manager (with <strong>Day</strong> time breakdown). More accurate than API backfill — uses Meta's official numbers, no attribution lag. Auto-classifies BA/Leads from campaign names, dedupes by Date+Campaign ID. Replaces any existing rows for those keys.
+    </div>
+    <div class="card-actions">
+      <div class="field" style="flex:1;min-width:200px">
+        <label class="field-label">CSV file</label>
+        <input type="file" class="input" id="csvFile" accept=".csv,text/csv">
+      </div>
+      <button class="btn btn-primary" id="csvUploadBtn" onclick="uploadCSV()">Import CSV</button>
+    </div>
+    <div class="result" id="csvResult"></div>
+  </div>
+
   <!-- BACKFILL -->
   <div class="card">
     <div class="card-head">
@@ -266,6 +285,35 @@ function showResult(id, content, status='ok'){
   } else {
     el.textContent = content;
   }
+}
+
+async function uploadCSV() {
+  const fileInput = $('#csvFile');
+  const file = fileInput.files[0];
+  if (!file) { alert('Pick a CSV file first'); return; }
+
+  showResult('csvResult', `Reading ${file.name} (${(file.size/1024).toFixed(0)} KB)…`, 'running');
+  const btn = $('#csvUploadBtn');
+  btn.disabled = true;
+  btn.textContent = 'Importing…';
+
+  try {
+    const text = await file.text();
+    showResult('csvResult', `Sending to server (${(text.length/1024).toFixed(0)} KB)…`, 'running');
+
+    const r = await fetch('/api/import-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/csv' },
+      body: text,
+    });
+    const j = await r.json();
+    showResult('csvResult', j, j.ok ? 'ok' : 'error');
+  } catch (e) {
+    showResult('csvResult', 'Error: ' + e.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Import CSV';
 }
 
 async function runPull() {
