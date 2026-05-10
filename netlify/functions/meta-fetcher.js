@@ -6,13 +6,23 @@ const { CONFIG, classifyCampaign } = require("./config");
 // One row per campaign per date
 // ============================================================
 
+// ============================================================
+// LEAD COUNTING — three distinct, non-overlapping action types
+// Sum = total leads. No double-counting.
+// ============================================================
+// Why these 3:
+//   1. 'lead' — Meta lead form submissions (LEADS_ABO, LEADS_CBO style)
+//   2. 'offsite_conversion.fb_pixel_lead' — website form leads via pixel (LEADSWEB)
+//   3. 'onsite_conversion.messaging_conversation_started_7d' — WhatsApp/Messenger
+//      conversations (LEADSWA, LEADSMESSENGER, IF&M ad sets)
+//
+// Notably EXCLUDED to avoid double-counting:
+//   - 'onsite_conversion.lead_grouped'  (overlaps with 'lead')
+//   - 'leadgen.other'                    (overlaps with 'lead')
+//   - 'complete_registration'            (overlaps with pixel_lead in some setups)
 const LEAD_ACTION_TYPES = [
   "lead",
-  "onsite_conversion.lead_grouped",
   "offsite_conversion.fb_pixel_lead",
-  "leadgen.other",
-  "offsite_conversion.fb_pixel_complete_registration",
-  "complete_registration",
   "onsite_conversion.messaging_conversation_started_7d",
 ];
 

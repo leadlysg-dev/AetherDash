@@ -78,12 +78,22 @@ const CONFIG = {
 };
 
 // ============================================================
-// CAMPAIGN TYPE CLASSIFIER
+// CAMPAIGN TYPE CLASSIFIER — name-based (Aether Athletics convention)
 // ============================================================
+// Naming pattern: [DATE]_[TYPE]_[STRATEGY]_[BUDGET]
+// Examples:
+//   25NOV2024_LEADS_ABO          → Leads
+//   22MAR2025_LEADSMESSENGER_CBO → Leads
+//   22MAR2025_LEADSWA_ABO        → Leads
+//   22MAR2025_LEADSWEB_ABO       → Leads
+//   04NOV2024_BA_PROSPECTING_CBO → BA
+//   14APR2025_BA_RT_ABO          → BA
+//   25NOV2024_ENGAGEMENT_ABO     → BA
+//   28OCT2024_PPE_ABO            → BA
+//   KEEPOFF_ENGAGEMENT           → Other (test/holding, never run)
 
-// Maps Meta objectives to internal type. BA = Brand Awareness.
-const OBJECTIVE_MAP = {
-  // Brand Awareness / top-of-funnel
+// Used as last-resort fallback if campaign name doesn't match any pattern
+const OBJECTIVE_FALLBACK_MAP = {
   BRAND_AWARENESS: "BA",
   REACH: "BA",
   OUTCOME_AWARENESS: "BA",
@@ -93,8 +103,6 @@ const OBJECTIVE_MAP = {
   OUTCOME_ENGAGEMENT: "BA",
   OUTCOME_TRAFFIC: "BA",
   LINK_CLICKS: "BA",
-
-  // Lead-gen / bottom-of-funnel
   LEAD_GENERATION: "Leads",
   OUTCOME_LEADS: "Leads",
   CONVERSIONS: "Leads",
@@ -103,14 +111,20 @@ const OBJECTIVE_MAP = {
 };
 
 function classifyCampaign(objective, campaignName = "") {
-  // 1. Try objective map
-  if (OBJECTIVE_MAP[objective]) return OBJECTIVE_MAP[objective];
+  const n = String(campaignName || "").toUpperCase();
 
-  // 2. Fall back to name-based heuristics (case-insensitive)
-  const n = (campaignName || "").toLowerCase();
-  if (n.includes("lead") || n.includes("conversion") || n.includes("signup")) return "Leads";
-  if (n.includes("ba ") || n.includes("brand") || n.includes("awareness") || n.includes("reach"))
-    return "BA";
+  // 1. Skip "KEEPOFF" campaigns — these are paused holding campaigns
+  if (n.startsWith("KEEPOFF_") || n.startsWith("KEEPOFF ")) return "Other";
+
+  // 2. Leads — matches _LEADS_, _LEADSWA_, _LEADSMESSENGER_, _LEADSWEB_, etc.
+  //    Pattern: underscore + LEADS + optional letters + underscore
+  if (/_LEADS[A-Z]*_/.test(n)) return "Leads";
+
+  // 3. Brand Awareness — matches _BA_, _ENGAGEMENT_, _PPE_
+  if (/_BA_|_ENGAGEMENT_|_PPE_/.test(n)) return "BA";
+
+  // 4. Fall back to Meta objective
+  if (OBJECTIVE_FALLBACK_MAP[objective]) return OBJECTIVE_FALLBACK_MAP[objective];
 
   return "Other";
 }
