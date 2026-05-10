@@ -1,5 +1,5 @@
 // ============================================================
-// CONFIG — all env vars in one place
+// AETHER ATHLETICS — CONFIG
 // ============================================================
 
 const CONFIG = {
@@ -10,7 +10,7 @@ const CONFIG = {
   },
   meta: {
     accessToken: process.env.META_ACCESS_TOKEN,
-    adAccountId: process.env.META_AD_ACCOUNT_ID, // format: act_123456789
+    adAccountId: process.env.META_AD_ACCOUNT_ID,
     apiVersion: "v21.0",
   },
   google: {
@@ -25,21 +25,80 @@ const CONFIG = {
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY,
   },
+
+  // Gym client business rules
+  business: {
+    // Target cost per lead. Edit via TARGET_CPL env var.
+    targetCPL: parseFloat(process.env.TARGET_CPL || "50"),
+    // Typical leads campaign: budget cap and duration
+    leadsCampaignBudget: parseFloat(process.env.LEADS_CAMPAIGN_BUDGET || "2000"),
+    leadsCampaignDays: parseInt(process.env.LEADS_CAMPAIGN_DAYS || "21", 10),
+    // A campaign is "currently active" if it had spend in the last N days
+    activeWindowDays: 3,
+    // Site URL (used in Telegram briefing as a link)
+    dashboardUrl: process.env.DASHBOARD_URL || "",
+  },
+
   sheet: {
     metaTab: "META RAW",
     headers: [
       "Date",
+      "Campaign ID",
+      "Campaign Name",
+      "Objective",
+      "Type",
+      "Status",
       "Spend",
       "Impressions",
+      "Reach",
+      "Frequency",
       "Clicks",
       "CPM",
       "CTR",
       "CPC",
-      "Conversions",
-      "Cost Per Conversion",
+      "Leads",
+      "Cost Per Lead",
     ],
   },
 };
+
+// ============================================================
+// CAMPAIGN TYPE CLASSIFIER
+// ============================================================
+
+// Maps Meta objectives to internal type. BA = Brand Awareness.
+const OBJECTIVE_MAP = {
+  // Brand Awareness / top-of-funnel
+  BRAND_AWARENESS: "BA",
+  REACH: "BA",
+  OUTCOME_AWARENESS: "BA",
+  POST_ENGAGEMENT: "BA",
+  PAGE_LIKES: "BA",
+  VIDEO_VIEWS: "BA",
+  OUTCOME_ENGAGEMENT: "BA",
+  OUTCOME_TRAFFIC: "BA",
+  LINK_CLICKS: "BA",
+
+  // Lead-gen / bottom-of-funnel
+  LEAD_GENERATION: "Leads",
+  OUTCOME_LEADS: "Leads",
+  CONVERSIONS: "Leads",
+  OUTCOME_SALES: "Leads",
+  MESSAGES: "Leads",
+};
+
+function classifyCampaign(objective, campaignName = "") {
+  // 1. Try objective map
+  if (OBJECTIVE_MAP[objective]) return OBJECTIVE_MAP[objective];
+
+  // 2. Fall back to name-based heuristics (case-insensitive)
+  const n = (campaignName || "").toLowerCase();
+  if (n.includes("lead") || n.includes("conversion") || n.includes("signup")) return "Leads";
+  if (n.includes("ba ") || n.includes("brand") || n.includes("awareness") || n.includes("reach"))
+    return "BA";
+
+  return "Other";
+}
 
 // ============================================================
 // HELPERS
@@ -68,12 +127,8 @@ function getServiceAccountCredentials() {
   }
 
   let privateKey = CONFIG.google.serviceAccountKey;
-
-  // Handle: literal "\n" sequences (common when pasting JSON-encoded private_key into env vars)
-  // Convert them into real newline characters
   privateKey = privateKey.replace(/\\n/g, "\n");
 
-  // Handle: if it's base64-encoded (no PEM headers), decode and wrap
   if (!privateKey.includes("BEGIN PRIVATE KEY")) {
     try {
       const raw = Buffer.from(privateKey, "base64").toString("utf-8");
@@ -85,9 +140,7 @@ function getServiceAccountCredentials() {
           .join("\n")}\n-----END PRIVATE KEY-----\n`;
       }
     } catch (e) {
-      throw new Error(
-        "GOOGLE_SA_PRIVATE_KEY format not recognized. Paste the 'private_key' value from your service account JSON."
-      );
+      throw new Error("GOOGLE_SA_PRIVATE_KEY format not recognized.");
     }
   }
 
@@ -99,6 +152,7 @@ function getServiceAccountCredentials() {
 
 module.exports = {
   CONFIG,
+  classifyCampaign,
   getYesterdaySGT,
   getDateSGT,
   getServiceAccountCredentials,

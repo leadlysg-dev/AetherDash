@@ -1,126 +1,117 @@
 # Aether Athletics — Ad Pipeline
 
-Daily Meta Ads pull → Google Sheets → Telegram AI briefing. Same architecture as AARO, simplified for a single Meta account.
+Daily Meta Ads pull → Google Sheets → Telegram briefing → live dashboard.
+
+Distinguishes **Brand Awareness (BA)** vs **Lead-gen** campaigns automatically.
 
 ## What this does
 
-- **7:00am SGT** — pulls yesterday's Meta ad account performance, writes to Google Sheet
-- **7:30am SGT** — reads sheet, asks Claude for insight, posts to Telegram
+- **7:00am SGT** — pulls yesterday's campaign-level Meta Ads data, writes to sheet
+- **7:30am SGT** — generates AI briefing (gym-owner voice), posts to Telegram
+- **Dashboard** at `/` — live performance view with status banner, KPIs, charts, campaign breakdowns
 
-## Deploy steps
-
-### 1. Push to GitHub
-
-```bash
-cd aa-pipeline
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-# Create new repo on GitHub (e.g. aa-pipeline), then:
-git remote add origin https://github.com/YOUR_USERNAME/aa-pipeline.git
-git push -u origin main
-```
-
-### 2. Connect to Netlify
-
-1. Go to **app.netlify.com** → **Add new site** → **Import an existing project**
-2. Pick GitHub → select your `aa-pipeline` repo
-3. Build settings: leave defaults (`netlify.toml` handles everything)
-4. Deploy site
-5. Rename the site (Site settings → Change site name) to something like `aetherathletics-pipeline`
-
-### 3. Set up Google Sheet
-
-1. Create a new blank Google Sheet — name it `Aether Athletics — Reporting Data`
-2. Copy the Sheet ID from the URL: `https://docs.google.com/spreadsheets/d/THIS_PART_HERE/edit`
-3. Share the sheet with your service account email (the one from `GOOGLE_SA_CLIENT_EMAIL`) → Editor access
-
-The pipeline will auto-create the `META RAW` tab on first run.
-
-### 4. Add env vars in Netlify
-
-Site settings → Environment variables → Add the following:
-
-| Variable | What it is | Source |
-|----------|------------|--------|
-| `META_ACCESS_TOKEN` | Long-lived system user token | From Meta Business Settings (you've already saved this) |
-| `META_AD_ACCOUNT_ID` | Aether Athletics ad account, format `act_123456789` | From Meta Business Settings |
-| `GOOGLE_SHEET_ID` | The sheet ID from URL | Step 3 above |
-| `GOOGLE_SA_CLIENT_EMAIL` | Service account email | From Google Cloud Console (reuse AARO's if same project) |
-| `GOOGLE_SA_PRIVATE_KEY` | Raw base64 of the PRIVATE KEY body (no PEM headers) | See "Private key encoding" below |
-| `ANTHROPIC_API_KEY` | Your Anthropic API key | Reuse AARO's |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token | Reuse `@Leadly_sg_bot` token from AARO |
-| `TELEGRAM_CHAT_ID` | Chat/group ID for AA's briefings | Create a new Telegram group, add the bot, get chat ID |
-
-#### Private key encoding
-
-Take the JSON service account key, extract the `private_key` field. The value looks like:
+## Architecture
 
 ```
------BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSj...
------END PRIVATE KEY-----
+Meta Ads API → /api/daily-pull → Google Sheet (META RAW tab)
+                                    ↓
+                              /api/dashboard-data
+                                    ↓
+                              public/index.html (live dashboard)
+
+Google Sheet → /api/daily-insight → Anthropic → Telegram
 ```
 
-Strip the `-----BEGIN/END-----` lines and all newlines. Take only the base64 body. Paste that into `GOOGLE_SA_PRIVATE_KEY`. The code will reconstruct the PEM format at runtime.
+## Env vars (Netlify → Site config → Environment variables)
 
-### 5. Trigger a redeploy
+| Variable | Description |
+|---|---|
+| `META_ACCESS_TOKEN` | System user token from Meta Business |
+| `META_AD_ACCOUNT_ID` | Format `act_123456789` |
+| `GOOGLE_SHEET_ID` | From the sheet URL |
+| `GOOGLE_SA_CLIENT_EMAIL` | Service account email |
+| `GOOGLE_SA_PRIVATE_KEY` | Paste `private_key` value from JSON (with `\n` literals) |
+| `ANTHROPIC_API_KEY` | Reuse from AARO |
+| `TELEGRAM_BOT_TOKEN` | New bot for AA |
+| `TELEGRAM_CHAT_ID` | Negative for groups, positive for DM |
+| `TARGET_CPL` | Target cost per lead (default `50`) |
+| `LEADS_CAMPAIGN_BUDGET` | Typical budget per Lead campaign (default `2000`) |
+| `LEADS_CAMPAIGN_DAYS` | Typical Lead campaign duration (default `21`) |
+| `DASHBOARD_URL` | (optional) Full dashboard URL — adds link to TG briefing |
 
-After adding env vars, redeploy: **Deploys → Trigger deploy → Deploy site**.
+## Endpoints
 
-### 6. Verify everything works
+| URL | Purpose |
+|---|---|
+| `/` | Live dashboard |
+| `/api/diagnostic` | Verify all env vars + API connections |
+| `/api/daily-pull` | Pull yesterday now |
+| `/api/daily-pull?date=2026-05-01` | Pull a specific date |
+| `/api/backfill?start=2026-01-01&end=2026-05-05` | Backfill a range |
+| `/api/dashboard-data` | JSON endpoint feeding the dashboard |
+| `/api/dashboard-data?days=7` | Last 7 days |
+| `/api/dashboard-data?start=2026-04-01&end=2026-05-01` | Custom range |
+| `/api/daily-insight?preview=true` | Preview Telegram message (no send) |
+| `/api/daily-insight` | Generate + send briefing now |
 
-Visit: `https://YOUR-SITE.netlify.app/api/diagnostic`
+## Sheet schema
 
-Expected: all four checks `ok: true` (Meta, Sheets, Anthropic, Telegram).
+Tab: `META RAW` — auto-created on first run. One row per campaign per day.
 
-If any fail, the error message will tell you which env var is wrong.
+| Date | Campaign ID | Campaign Name | Objective | Type | Status | Spend | Impressions | Reach | Frequency | Clicks | CPM | CTR | CPC | Leads | Cost Per Lead |
+|------|------|------|------|------|------|------|------|------|------|------|------|------|------|------|------|
 
-### 7. Pull yesterday's data
+**Type** is auto-classified:
+- `BA` — REACH, BRAND_AWARENESS, ENGAGEMENT, TRAFFIC, VIDEO_VIEWS, PAGE_LIKES, LINK_CLICKS objectives
+- `Leads` — LEAD_GENERATION, OUTCOME_LEADS, CONVERSIONS, MESSAGES, OUTCOME_SALES objectives
+- `Other` — anything else
 
-`https://YOUR-SITE.netlify.app/api/daily-pull`
+If classification looks off, edit `OBJECTIVE_MAP` in `netlify/functions/config.js`.
 
-Then check the Google Sheet — `META RAW` tab should now exist with one row.
+## Lead-gen "campaign run" detection
 
-### 8. Backfill historical data (optional)
+The dashboard auto-detects discrete Lead campaign runs from spend patterns:
+- Same campaign ID + contiguous days of spend (gaps ≤ 3 days)
+- A gap > 3 days = new run
+- Active = had spend in the last 3 days
 
-`https://YOUR-SITE.netlify.app/api/backfill?start=2026-01-01&end=2026-05-05`
+Past runs show in the **Lead Campaign History** tab. The current active run shows in the **status banner** at the top.
 
-This loops through every date and pulls Meta data for each. Takes ~1 second per day.
+## Deploy
 
-### 9. Test the Telegram briefing
-
-Preview without sending: `/api/daily-insight?preview=true`
-
-Send for real: `/api/daily-insight`
-
-### 10. Confirm scheduled functions are active
-
-Site settings → Functions → you should see `daily-pull` and `daily-insight` listed as scheduled.
-
-That's it. After this, you don't touch anything — the daily briefing just shows up at 7:30am SGT.
+1. Push to GitHub
+2. Netlify → Import existing project → pick repo → deploy (defaults are fine)
+3. Add env vars
+4. Trigger redeploy
+5. Hit `/api/diagnostic` to verify
+6. Hit `/api/daily-pull` for first data
+7. Optional: hit `/api/backfill?start=YYYY-MM-DD&end=YYYY-MM-DD` for history
+8. Visit `/` for the dashboard
 
 ## File layout
 
 ```
 aa-pipeline/
-├── netlify.toml           Netlify config
-├── package.json           Dependencies
+├── netlify.toml
+├── package.json
 ├── public/
-│   └── index.html         Landing page (lists endpoints)
+│   └── index.html              ← Dashboard (frontend)
 └── netlify/functions/
-    ├── config.js          Env vars + helpers
-    ├── meta-fetcher.js    Pulls from Meta Ads API
-    ├── sheets-writer.js   Writes to Google Sheets
-    ├── daily-pull.js      Scheduled 7am SGT
-    ├── daily-insight.js   Scheduled 7:30am SGT
-    ├── backfill.js        Manual: pull a date range
-    └── diagnostic.js      Manual: verify env vars
+    ├── config.js               ← env vars, classifier, helpers
+    ├── meta-fetcher.js         ← campaign-level Meta pull
+    ├── sheets-writer.js        ← write to Google Sheets
+    ├── daily-pull.js           ← scheduled 7am SGT
+    ├── daily-insight.js        ← scheduled 7:30am SGT (Telegram)
+    ├── backfill.js             ← manual: date range pull
+    ├── dashboard-data.js       ← JSON API for frontend
+    └── diagnostic.js           ← verify env vars
 ```
 
-## Differences from AARO
+## Difference from AARO
 
-- Single Meta tab (no per-campaign segmentation)
-- No Google Ads (you said Meta only)
-- Same Telegram briefing format
+- **Single platform** (Meta only — no Google Ads)
+- **Campaign-level data** (vs account-level for AARO Meta)
+- **BA/Leads classification** (gym client uses two distinct campaign types)
+- **Status-aware dashboard** with active campaign banner + progress bar
+- **Lead campaign run history** (auto-detected from spend gaps)
+- **Gym-owner Telegram voice** (punchy, target-aware)

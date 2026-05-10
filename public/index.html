@@ -1,64 +1,929 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Aether Athletics — Pipeline</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aether Athletics — Ad Performance</title>
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
-  body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #0f172a;
-    color: #e2e8f0;
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 48px 24px;
-    line-height: 1.6;
-  }
-  h1 { color: #f1f5f9; font-size: 28px; margin-bottom: 8px; }
-  .sub { color: #94a3b8; margin-bottom: 32px; }
-  .card {
-    background: #1e293b;
-    border: 1px solid #334155;
-    border-radius: 12px;
-    padding: 20px 24px;
-    margin-bottom: 16px;
-  }
-  .card h2 { font-size: 16px; margin: 0 0 8px; color: #f1f5f9; }
-  .card p { margin: 4px 0; color: #cbd5e1; font-size: 14px; }
-  code {
-    background: #0f172a;
-    padding: 2px 6px;
-    border-radius: 4px;
-    color: #93c5fd;
-    font-size: 13px;
-  }
-  a { color: #60a5fa; }
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0c10;
+  --surface:#11141b;
+  --surface-2:#161a23;
+  --surface-3:#1c2230;
+  --border:#222837;
+  --border-soft:#1a1f2c;
+
+  --text:#e8ecf3;
+  --text-2:#8b94a8;
+  --text-3:#5a6478;
+  --muted:#404a5e;
+
+  --accent:#52e6a1;        /* electric green — gym energy */
+  --accent-dim:rgba(82,230,161,0.12);
+  --accent-strong:#2dd07f;
+  --accent-glow:rgba(82,230,161,0.25);
+
+  --warn:#f7b955;
+  --warn-dim:rgba(247,185,85,0.12);
+  --bad:#ff6b6b;
+  --bad-dim:rgba(255,107,107,0.12);
+  --good:var(--accent);
+  --good-dim:var(--accent-dim);
+
+  --leads:#52e6a1;          /* leads = green (money) */
+  --leads-dim:rgba(82,230,161,0.1);
+  --ba:#a78bfa;             /* BA = violet */
+  --ba-dim:rgba(167,139,250,0.1);
+
+  --r:10px;
+  --r-lg:14px;
+
+  --font:'Outfit',-apple-system,system-ui,sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+html,body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* Subtle grain bg */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:radial-gradient(ellipse at top, rgba(82,230,161,0.04), transparent 50%),
+             radial-gradient(ellipse at bottom right, rgba(167,139,250,0.03), transparent 60%);
+  pointer-events:none;z-index:0;
+}
+.container{max-width:1280px;margin:0 auto;padding:24px 22px 60px;position:relative;z-index:1}
+
+/* === LOADING === */
+.loader{
+  position:fixed;inset:0;background:var(--bg);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  z-index:100;gap:14px;
+}
+.loader-dot{
+  width:38px;height:38px;border-radius:50%;
+  background:radial-gradient(circle, var(--accent) 0%, transparent 70%);
+  animation:pulse 1.4s ease-in-out infinite;
+}
+@keyframes pulse{
+  0%,100%{transform:scale(0.8);opacity:0.4}
+  50%{transform:scale(1.3);opacity:1}
+}
+.loader-text{font-size:.78rem;color:var(--text-3);letter-spacing:0.05em;text-transform:uppercase;font-weight:500}
+.hidden{display:none!important}
+
+/* === HEADER === */
+header{display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:18px;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--border-soft)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand-mark{
+  width:42px;height:42px;border-radius:10px;
+  background:linear-gradient(135deg, var(--accent) 0%, var(--accent-strong) 100%);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:700;color:#0a0c10;font-family:var(--mono);
+  box-shadow:0 0 24px var(--accent-glow);
+}
+.brand h1{font-size:1.25rem;font-weight:600;letter-spacing:-0.01em}
+.brand-sub{font-size:.75rem;color:var(--text-3);margin-top:2px;font-weight:400}
+.period-info{text-align:right}
+.period-label{font-size:.7rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;font-weight:600}
+.period-range{font-family:var(--mono);font-size:.85rem;color:var(--text);margin-top:3px;font-weight:500}
+
+/* === FILTERS / PILLS === */
+.controls{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;align-items:center}
+.controls-sep{flex:1;min-width:8px}
+.pill{
+  background:var(--surface);border:1px solid var(--border);color:var(--text-2);
+  padding:7px 14px;border-radius:50px;font-size:.78rem;cursor:pointer;
+  font-family:var(--font);font-weight:500;transition:all .15s ease;
+}
+.pill:hover{border-color:var(--text-3);color:var(--text)}
+.pill.on{background:var(--accent);color:#0a0c10;border-color:var(--accent);font-weight:600}
+.pill.on.violet{background:var(--ba);color:#fff;border-color:var(--ba)}
+.date-input{
+  background:var(--surface);border:1px solid var(--border);color:var(--text);
+  padding:7px 10px;border-radius:8px;font-size:.78rem;font-family:var(--font);
+}
+.date-go{
+  background:var(--surface-2);border:1px solid var(--border);color:var(--text);
+  padding:7px 16px;border-radius:8px;font-size:.78rem;cursor:pointer;font-family:var(--font);font-weight:500;
+}
+.date-go:hover{background:var(--surface-3)}
+
+/* === STATUS BANNER === */
+.status-banner{
+  background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);
+  padding:20px 24px;margin-bottom:18px;
+  display:flex;align-items:center;justify-content:space-between;gap:24px;flex-wrap:wrap;
+  position:relative;overflow:hidden;
+}
+.status-banner.active{border-color:rgba(82,230,161,0.3)}
+.status-banner.active::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
+  box-shadow:0 0 14px var(--accent-glow);
+}
+.status-banner.paused{border-color:rgba(255,255,255,0.06)}
+.status-banner.paused::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--muted);
+}
+.status-left{display:flex;flex-direction:column;gap:6px;min-width:0}
+.status-tag{display:flex;align-items:center;gap:8px;font-size:.7rem;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-3);font-weight:600}
+.status-dot{width:8px;height:8px;border-radius:50%}
+.status-dot.live{background:var(--accent);box-shadow:0 0 12px var(--accent-glow);animation:liveBlink 2s ease-in-out infinite}
+.status-dot.idle{background:var(--muted)}
+@keyframes liveBlink{0%,100%{opacity:1}50%{opacity:0.5}}
+.status-headline{font-size:1.18rem;font-weight:600;color:var(--text);letter-spacing:-0.01em}
+.status-sub{font-size:.85rem;color:var(--text-2)}
+.status-right{display:flex;gap:24px;flex-wrap:wrap}
+.status-stat{text-align:right}
+.status-stat-label{font-size:.65rem;color:var(--text-3);text-transform:uppercase;letter-spacing:0.08em;font-weight:600;margin-bottom:4px}
+.status-stat-val{font-family:var(--mono);font-size:1.3rem;font-weight:600;color:var(--text);letter-spacing:-0.02em}
+.status-stat-sub{font-size:.7rem;color:var(--text-3);margin-top:1px;font-family:var(--mono)}
+.status-stat-val.good{color:var(--good)}
+.status-stat-val.bad{color:var(--bad)}
+
+/* Progress bar inside banner */
+.progress{margin-top:14px;width:100%}
+.progress-track{height:6px;background:var(--surface-3);border-radius:3px;overflow:hidden}
+.progress-fill{height:100%;background:linear-gradient(90deg, var(--accent) 0%, var(--accent-strong) 100%);border-radius:3px;transition:width 0.4s ease}
+.progress-meta{display:flex;justify-content:space-between;margin-top:6px;font-size:.7rem;color:var(--text-3);font-family:var(--mono)}
+
+/* === KPI STRIP === */
+.kpi-strip{
+  display:grid;grid-template-columns:repeat(6, 1fr);gap:10px;margin-bottom:22px;
+}
+.kpi{
+  background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--r);
+  padding:14px 16px;position:relative;overflow:hidden;
+  transition:border-color 0.2s ease;
+}
+.kpi:hover{border-color:var(--border)}
+.kpi-strip-tag{position:absolute;top:12px;right:12px;font-size:.55rem;text-transform:uppercase;font-weight:700;letter-spacing:0.08em;padding:2px 6px;border-radius:3px}
+.kpi-strip-tag.ba{background:var(--ba-dim);color:var(--ba)}
+.kpi-strip-tag.leads{background:var(--leads-dim);color:var(--leads)}
+.kpi-label{font-size:.66rem;text-transform:uppercase;letter-spacing:0.07em;color:var(--text-3);font-weight:600;margin-bottom:6px}
+.kpi-value{font-family:var(--mono);font-size:1.35rem;font-weight:600;color:var(--text);letter-spacing:-0.02em;line-height:1.1}
+.kpi-sub{font-size:.65rem;color:var(--text-3);margin-top:3px;font-family:var(--mono)}
+.kpi-delta{display:inline-flex;align-items:center;gap:3px;font-size:.65rem;font-weight:600;margin-top:6px}
+.kpi-delta.up{color:var(--good)}
+.kpi-delta.down{color:var(--bad)}
+.kpi-delta.flat{color:var(--text-3)}
+
+/* === TABS === */
+.tabs{display:flex;border-bottom:1px solid var(--border-soft);margin-bottom:20px;gap:0}
+.tab{
+  font-family:var(--font);font-size:.85rem;font-weight:500;
+  padding:11px 22px;background:none;border:none;color:var(--text-3);
+  cursor:pointer;position:relative;transition:color 0.15s ease;
+}
+.tab:hover{color:var(--text-2)}
+.tab.on{color:var(--accent)}
+.tab.on::after{
+  content:'';position:absolute;bottom:-1px;left:0;right:0;height:2px;
+  background:var(--accent);box-shadow:0 0 12px var(--accent-glow);
+}
+.tp{display:none}.tp.on{display:block}
+
+/* === INSIGHT CARDS === */
+.insight-row{display:grid;grid-template-columns:repeat(3, 1fr);gap:14px;margin-bottom:14px}
+.insight-row-2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.insight-row-1{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+.insight-card{
+  background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--r-lg);
+  padding:18px 20px;position:relative;overflow:hidden;
+}
+.ic-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ic-label{font-size:.7rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-3);font-weight:600}
+.ic-icon{font-size:1.05rem;opacity:0.85}
+.ic-big{font-family:var(--mono);font-size:2rem;font-weight:600;color:var(--text);letter-spacing:-0.03em;line-height:1}
+.ic-sub{font-size:.75rem;color:var(--text-3);margin-top:5px}
+.ic-mini{margin-top:14px;height:54px}
+
+/* Accent borders for insight types */
+.ic-leads::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--leads)}
+.ic-ba::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--ba)}
+.ic-mixed::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg, var(--leads) 0%, var(--ba) 100%)}
+
+/* === CHART CARDS === */
+.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+.chart-card{
+  background:var(--surface);border:1px solid var(--border-soft);border-radius:var(--r-lg);
+  padding:18px 20px;
+}
+.chart-card.full{grid-column:1/-1}
+.chart-card h3{font-size:.9rem;font-weight:600;color:var(--text);margin-bottom:4px}
+.chart-card p.chart-sub{font-size:.72rem;color:var(--text-3);margin-bottom:14px}
+.chart-card canvas{width:100%!important;max-height:260px}
+
+/* === TABLES === */
+.tbl-section{margin-bottom:24px}
+.tbl-title{
+  font-size:.95rem;font-weight:600;margin-bottom:12px;
+  display:flex;align-items:center;gap:10px;
+}
+.badge{font-size:.6rem;text-transform:uppercase;letter-spacing:0.08em;padding:3px 9px;border-radius:50px;font-weight:700}
+.badge-leads{background:var(--leads-dim);color:var(--leads)}
+.badge-ba{background:var(--ba-dim);color:var(--ba)}
+.badge-other{background:rgba(255,255,255,0.06);color:var(--text-3)}
+.badge-active{background:var(--good-dim);color:var(--good)}
+.badge-paused{background:rgba(255,255,255,0.06);color:var(--text-3)}
+.tbl-wrap{overflow-x:auto;background:var(--surface);border-radius:var(--r-lg);border:1px solid var(--border-soft)}
+table{width:100%;border-collapse:collapse;font-size:.78rem}
+thead th{
+  background:var(--surface-2);padding:10px 14px;text-align:left;
+  font-weight:600;font-size:.65rem;text-transform:uppercase;letter-spacing:0.06em;
+  color:var(--text-3);border-bottom:1px solid var(--border);white-space:nowrap;
+}
+tbody td{padding:11px 14px;border-bottom:1px solid var(--border-soft);font-family:var(--mono);font-size:.78rem}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--surface-2)}
+td.name{font-family:var(--font);color:var(--text);font-weight:500;max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+td.num{text-align:right;color:var(--text)}
+td.num.muted{color:var(--text-3)}
+td.num.good{color:var(--good)}
+td.num.bad{color:var(--bad)}
+
+/* === EMPTY STATE === */
+.empty{
+  text-align:center;padding:60px 20px;background:var(--surface);
+  border:1px dashed var(--border);border-radius:var(--r-lg);color:var(--text-3);
+}
+.empty h3{font-size:1.05rem;color:var(--text-2);margin-bottom:6px;font-weight:500}
+.empty p{font-size:.85rem}
+
+/* === RESPONSIVE === */
+@media(max-width:1100px){
+  .kpi-strip{grid-template-columns:repeat(3, 1fr)}
+  .chart-grid{grid-template-columns:1fr}
+}
+@media(max-width:680px){
+  .container{padding:16px 14px 40px}
+  header{flex-direction:column;gap:10px}
+  .period-info{text-align:left}
+  .insight-row,.insight-row-2{grid-template-columns:1fr}
+  .kpi-strip{grid-template-columns:repeat(2, 1fr)}
+  .status-banner{padding:18px}
+  .status-right{width:100%;justify-content:space-between;gap:12px}
+  .status-stat-val{font-size:1.05rem}
+  .tabs{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .tab{padding:10px 16px;font-size:.78rem;white-space:nowrap}
+}
+@media(max-width:420px){
+  .kpi-strip{grid-template-columns:1fr}
+  .brand h1{font-size:1.05rem}
+  .ic-big{font-size:1.6rem}
+}
 </style>
 </head>
 <body>
-  <h1>Aether Athletics — Ad Pipeline</h1>
-  <p class="sub">Daily Meta Ads pull → Google Sheets → Telegram briefing</p>
 
-  <div class="card">
-    <h2>📅 Schedules</h2>
-    <p>7:00am SGT — Daily pull (yesterday's Meta data → Sheet)</p>
-    <p>7:30am SGT — AI insight + Telegram briefing</p>
+<div class="loader" id="loader">
+  <div class="loader-dot"></div>
+  <div class="loader-text">Loading performance data</div>
+</div>
+
+<div class="container hidden" id="app">
+  <header>
+    <div class="brand">
+      <div class="brand-mark">A</div>
+      <div>
+        <h1>Aether Athletics</h1>
+        <div class="brand-sub">Ad performance · Meta</div>
+      </div>
+    </div>
+    <div class="period-info">
+      <div class="period-label">Reporting period</div>
+      <div class="period-range" id="periodRange">—</div>
+    </div>
+  </header>
+
+  <!-- PERIOD CONTROLS -->
+  <div class="controls">
+    <button class="pill" data-period="7">Last 7 days</button>
+    <button class="pill on" data-period="30">Last 30 days</button>
+    <button class="pill" data-period="90">Last 90 days</button>
+    <button class="pill" data-period="ytd">YTD</button>
+    <div class="controls-sep"></div>
+    <input type="date" class="date-input" id="dateFrom">
+    <span style="color:var(--text-3)">→</span>
+    <input type="date" class="date-input" id="dateTo">
+    <button class="date-go" id="dateGo">Apply</button>
   </div>
 
-  <div class="card">
-    <h2>🔧 Manual Endpoints</h2>
-    <p><code>/api/diagnostic</code> — verify all integrations</p>
-    <p><code>/api/daily-pull</code> — pull yesterday now</p>
-    <p><code>/api/daily-pull?date=2026-05-01</code> — pull a specific date</p>
-    <p><code>/api/daily-insight?preview=true</code> — preview message without sending</p>
-    <p><code>/api/daily-insight</code> — generate + send Telegram now</p>
-    <p><code>/api/backfill?start=2026-01-01&end=2026-05-05</code> — historical backfill</p>
+  <!-- STATUS BANNER -->
+  <div id="statusBanner"></div>
+
+  <!-- KPI STRIP -->
+  <div class="kpi-strip" id="kpiStrip"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab on" data-t="insights">Insights</button>
+    <button class="tab" data-t="campaigns">Campaign Breakdown</button>
+    <button class="tab" data-t="runs">Lead Campaign History</button>
   </div>
 
-  <div class="card">
-    <h2>📊 Data Sheet</h2>
-    <p>Tab: <code>META RAW</code></p>
-    <p>Columns: Date, Spend, Impressions, Clicks, CPM, CTR, CPC, Conversions, Cost Per Conversion</p>
+  <!-- INSIGHTS PANEL -->
+  <div class="tp on" id="tp-insights">
+    <div class="insight-row">
+      <div class="insight-card ic-leads">
+        <div class="ic-head"><span class="ic-label">Total Leads (period)</span><span class="ic-icon">🎣</span></div>
+        <div class="ic-big" id="cardLeadsTotal">—</div>
+        <div class="ic-sub" id="cardLeadsSub">—</div>
+        <div class="ic-mini"><canvas id="cMiniLeads"></canvas></div>
+      </div>
+      <div class="insight-card ic-leads">
+        <div class="ic-head"><span class="ic-label">Avg Cost / Lead</span><span class="ic-icon">💰</span></div>
+        <div class="ic-big" id="cardCPL">—</div>
+        <div class="ic-sub" id="cardCPLSub">—</div>
+        <div class="ic-mini"><canvas id="cMiniCPL"></canvas></div>
+      </div>
+      <div class="insight-card ic-ba">
+        <div class="ic-head"><span class="ic-label">BA Reach (period)</span><span class="ic-icon">📡</span></div>
+        <div class="ic-big" id="cardBAReach">—</div>
+        <div class="ic-sub" id="cardBAReachSub">—</div>
+        <div class="ic-mini"><canvas id="cMiniReach"></canvas></div>
+      </div>
+    </div>
+
+    <div class="chart-grid">
+      <div class="chart-card">
+        <h3>Daily Spend</h3>
+        <p class="chart-sub">Stacked: BA (violet) vs Leads (green)</p>
+        <canvas id="cSpend"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Daily Leads &amp; CPL</h3>
+        <p class="chart-sub">Bars = leads, line = cost per lead</p>
+        <canvas id="cLeads"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>BA Reach Over Time</h3>
+        <p class="chart-sub">Daily reach from awareness campaigns</p>
+        <canvas id="cReach"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>BA Impressions vs CTR</h3>
+        <p class="chart-sub">Bars = impressions, line = CTR%</p>
+        <canvas id="cBA"></canvas>
+      </div>
+    </div>
   </div>
+
+  <!-- CAMPAIGNS PANEL -->
+  <div class="tp" id="tp-campaigns">
+    <div class="tbl-section">
+      <div class="tbl-title"><span class="badge badge-leads">Leads</span> Lead-Gen Campaigns (period)</div>
+      <div class="tbl-wrap"><table id="tblLeadsCamps"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tbl-section">
+      <div class="tbl-title"><span class="badge badge-ba">BA</span> Brand Awareness Campaigns (period)</div>
+      <div class="tbl-wrap"><table id="tblBACamps"><thead></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tbl-section" id="otherSection" style="display:none">
+      <div class="tbl-title"><span class="badge badge-other">Other</span> Other Campaigns (period)</div>
+      <div class="tbl-wrap"><table id="tblOtherCamps"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+
+  <!-- LEAD RUNS PANEL -->
+  <div class="tp" id="tp-runs">
+    <div class="tbl-section">
+      <div class="tbl-title"><span class="badge badge-leads">Leads</span> All Lead Campaign Runs <span style="color:var(--text-3);font-weight:400;font-size:.78rem">(detected from data — gap &gt; 3 days = new run)</span></div>
+      <div class="tbl-wrap"><table id="tblRuns"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+let DATA = null;
+let charts = {};
+
+const fmtMoney = (n) => n == null || isNaN(n) ? '—' : '$' + Math.round(n).toLocaleString();
+const fmtMoneyDec = (n) => n == null || isNaN(n) ? '—' : '$' + Number(n).toFixed(2);
+const fmtNum = (n) => n == null || isNaN(n) ? '—' : Math.round(n).toLocaleString();
+const fmtPct = (n, d=2) => n == null || isNaN(n) ? '—' : Number(n).toFixed(d) + '%';
+const fmtDate = (d) => {
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+};
+const fmtDateLong = (d) => {
+  const dt = new Date(d);
+  return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+};
+
+// ============ DATA FETCH ============
+async function fetchData(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const res = await fetch('/api/dashboard-data' + (qs ? '?' + qs : ''));
+  return res.json();
+}
+
+// ============ STATUS BANNER ============
+function renderStatusBanner() {
+  const el = $('#statusBanner');
+  const ac = DATA.activeLeadsCampaign;
+  const lastRun = DATA.leadRuns?.[0];
+
+  if (ac) {
+    const overTarget = ac.cpl > DATA.config.targetCPL;
+    const cplClass = ac.cpl > 0 ? (overTarget ? 'bad' : 'good') : '';
+    const cplDelta = ac.cpl > 0
+      ? `${overTarget ? '+' : ''}${(((ac.cpl - DATA.config.targetCPL) / DATA.config.targetCPL) * 100).toFixed(0)}% vs $${DATA.config.targetCPL} target`
+      : 'no leads yet';
+    const spendPct = Math.min(100, (ac.spend / DATA.config.leadsCampaignBudget) * 100);
+
+    el.className = 'status-banner active';
+    el.innerHTML = `
+      <div class="status-left">
+        <div class="status-tag"><span class="status-dot live"></span> Lead campaign live</div>
+        <div class="status-headline">${escapeHTML(ac.campaignName)}</div>
+        <div class="status-sub">Day ${ac.days} · started ${fmtDateLong(ac.startDate)}</div>
+        <div class="progress">
+          <div class="progress-track"><div class="progress-fill" style="width:${spendPct}%"></div></div>
+          <div class="progress-meta"><span>${fmtMoney(ac.spend)} spent</span><span>${fmtMoney(DATA.config.leadsCampaignBudget)} budget · ${spendPct.toFixed(0)}%</span></div>
+        </div>
+      </div>
+      <div class="status-right">
+        <div class="status-stat">
+          <div class="status-stat-label">Leads</div>
+          <div class="status-stat-val">${ac.leads}</div>
+          <div class="status-stat-sub">${fmtMoney(ac.spend / ac.days)}/day</div>
+        </div>
+        <div class="status-stat">
+          <div class="status-stat-label">Cost / Lead</div>
+          <div class="status-stat-val ${cplClass}">${ac.cpl > 0 ? fmtMoneyDec(ac.cpl) : '—'}</div>
+          <div class="status-stat-sub">${cplDelta}</div>
+        </div>
+      </div>
+    `;
+  } else if (lastRun) {
+    const today = new Date();
+    const lastEnd = new Date(lastRun.endDate);
+    const daysSince = Math.floor((today - lastEnd) / (1000 * 60 * 60 * 24));
+    el.className = 'status-banner paused';
+    el.innerHTML = `
+      <div class="status-left">
+        <div class="status-tag"><span class="status-dot idle"></span> No lead campaign running</div>
+        <div class="status-headline">Paused — last ran ${daysSince} days ago</div>
+        <div class="status-sub">"${escapeHTML(lastRun.campaignName)}" ran ${fmtDate(lastRun.startDate)} → ${fmtDate(lastRun.endDate)}</div>
+      </div>
+      <div class="status-right">
+        <div class="status-stat">
+          <div class="status-stat-label">Last campaign · Leads</div>
+          <div class="status-stat-val">${lastRun.leads}</div>
+          <div class="status-stat-sub">over ${lastRun.days} days</div>
+        </div>
+        <div class="status-stat">
+          <div class="status-stat-label">Last campaign · CPL</div>
+          <div class="status-stat-val ${lastRun.cpl > DATA.config.targetCPL ? 'bad' : 'good'}">${lastRun.cpl > 0 ? fmtMoneyDec(lastRun.cpl) : '—'}</div>
+          <div class="status-stat-sub">target $${DATA.config.targetCPL}</div>
+        </div>
+      </div>
+    `;
+  } else {
+    el.className = 'status-banner paused';
+    el.innerHTML = `
+      <div class="status-left">
+        <div class="status-tag"><span class="status-dot idle"></span> No lead campaigns yet</div>
+        <div class="status-headline">No lead-gen runs detected</div>
+        <div class="status-sub">Once you launch a Lead campaign, it'll show up here automatically.</div>
+      </div>
+    `;
+  }
+}
+
+// ============ KPI STRIP ============
+function deltaBadge(v) {
+  if (v == null || isNaN(v)) return '';
+  const cls = v > 0.5 ? 'up' : v < -0.5 ? 'down' : 'flat';
+  const arrow = v > 0.5 ? '▲' : v < -0.5 ? '▼' : '–';
+  return `<div class="kpi-delta ${cls}">${arrow} ${Math.abs(v).toFixed(1)}% vs prev</div>`;
+}
+
+function renderKPIs() {
+  const s = DATA.summary;
+  const d = s.deltas;
+  const html = `
+    <div class="kpi">
+      <div class="kpi-strip-tag leads">Leads</div>
+      <div class="kpi-label">Leads</div>
+      <div class="kpi-value">${s.leads.leads}</div>
+      ${deltaBadge(d.leads)}
+    </div>
+    <div class="kpi">
+      <div class="kpi-strip-tag leads">Leads</div>
+      <div class="kpi-label">Avg CPL</div>
+      <div class="kpi-value">${s.leads.cpl > 0 ? fmtMoneyDec(s.leads.cpl) : '—'}</div>
+      <div class="kpi-sub">target ${fmtMoney(DATA.config.targetCPL)}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Total Spend</div>
+      <div class="kpi-value">${fmtMoney(s.totals.spend)}</div>
+      ${deltaBadge(d.spend)}
+    </div>
+    <div class="kpi">
+      <div class="kpi-strip-tag ba">BA</div>
+      <div class="kpi-label">BA Reach</div>
+      <div class="kpi-value">${fmtNum(s.ba.reach)}</div>
+      <div class="kpi-sub">period total</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-strip-tag ba">BA</div>
+      <div class="kpi-label">BA Impressions</div>
+      <div class="kpi-value">${fmtNum(s.ba.impressions)}</div>
+      ${deltaBadge(d.impressions)}
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Clicks</div>
+      <div class="kpi-value">${fmtNum(s.totals.clicks)}</div>
+      ${deltaBadge(d.clicks)}
+    </div>
+  `;
+  $('#kpiStrip').innerHTML = html;
+}
+
+// ============ CHARTS ============
+const chartDefaults = {
+  responsive: true,
+  maintainAspectRatio: false,
+  interaction: { mode: 'index', intersect: false },
+  plugins: {
+    legend: {
+      position: 'bottom',
+      labels: { usePointStyle: true, padding: 14, font: { family: 'Outfit', size: 11 }, color: '#8b94a8' }
+    },
+    tooltip: {
+      backgroundColor: '#11141b', titleFont: { family: 'Outfit' },
+      bodyFont: { family: 'JetBrains Mono', size: 11.5 }, padding: 10, cornerRadius: 8,
+      borderColor: '#222837', borderWidth: 1
+    }
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { font: { family: 'Outfit', size: 10 }, color: '#5a6478', maxRotation: 0 } },
+    y: { grid: { color: '#1a1f2c' }, ticks: { font: { family: 'JetBrains Mono', size: 10 }, color: '#5a6478' } }
+  }
+};
+
+function makeChart(id, type, data, opts = {}) {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id);
+  if (!ctx) return;
+  const merged = JSON.parse(JSON.stringify(chartDefaults));
+  if (opts.scales) Object.assign(merged.scales, opts.scales);
+  if (opts.plugins) {
+    for (const k in opts.plugins) merged.plugins[k] = { ...(merged.plugins[k] || {}), ...opts.plugins[k] };
+  }
+  if (opts.elements) merged.elements = opts.elements;
+  if (opts.maintainAspectRatio !== undefined) merged.maintainAspectRatio = opts.maintainAspectRatio;
+  charts[id] = new Chart(ctx.getContext('2d'), { type, data, options: merged });
+}
+
+function renderMiniSparks() {
+  const ts = DATA.timeseries;
+  const labels = ts.all.map((d) => fmtDate(d.date));
+
+  // Mini leads sparkline
+  makeChart('cMiniLeads', 'line', {
+    labels,
+    datasets: [{
+      data: ts.leads.map(d => d.leads),
+      borderColor: '#52e6a1', borderWidth: 2,
+      fill: true, backgroundColor: 'rgba(82,230,161,0.08)',
+      tension: 0.3, pointRadius: 0
+    }]
+  }, {
+    plugins: { legend: { display: false } },
+    scales: { x: { display: false }, y: { display: false } },
+    maintainAspectRatio: false
+  });
+
+  // Mini CPL sparkline
+  makeChart('cMiniCPL', 'line', {
+    labels,
+    datasets: [{
+      data: ts.leads.map(d => d.cpl),
+      borderColor: '#52e6a1', borderWidth: 2,
+      fill: true, backgroundColor: 'rgba(82,230,161,0.08)',
+      tension: 0.3, pointRadius: 0
+    }]
+  }, {
+    plugins: { legend: { display: false } },
+    scales: { x: { display: false }, y: { display: false } },
+    maintainAspectRatio: false
+  });
+
+  // Mini reach sparkline
+  makeChart('cMiniReach', 'line', {
+    labels,
+    datasets: [{
+      data: ts.ba.map(d => d.reach),
+      borderColor: '#a78bfa', borderWidth: 2,
+      fill: true, backgroundColor: 'rgba(167,139,250,0.08)',
+      tension: 0.3, pointRadius: 0
+    }]
+  }, {
+    plugins: { legend: { display: false } },
+    scales: { x: { display: false }, y: { display: false } },
+    maintainAspectRatio: false
+  });
+}
+
+function renderInsightCards() {
+  const s = DATA.summary;
+  $('#cardLeadsTotal').textContent = s.leads.leads || 0;
+  $('#cardLeadsSub').textContent = `from ${fmtMoney(s.leads.spend)} spend`;
+  $('#cardCPL').textContent = s.leads.cpl > 0 ? fmtMoneyDec(s.leads.cpl) : '—';
+  $('#cardCPLSub').textContent = `target ${fmtMoney(DATA.config.targetCPL)}`;
+  $('#cardBAReach').textContent = fmtNum(s.ba.reach);
+  $('#cardBAReachSub').textContent = `${fmtNum(s.ba.impressions)} impressions`;
+}
+
+function renderMainCharts() {
+  const ts = DATA.timeseries;
+  const labels = ts.all.map((d) => fmtDate(d.date));
+
+  // Daily spend stacked
+  makeChart('cSpend', 'bar', {
+    labels,
+    datasets: [
+      {
+        label: 'BA',
+        data: ts.ba.map(d => d.spend),
+        backgroundColor: '#a78bfa', borderRadius: 4
+      },
+      {
+        label: 'Leads',
+        data: ts.leads.map(d => d.spend),
+        backgroundColor: '#52e6a1', borderRadius: 4
+      }
+    ]
+  }, {
+    scales: {
+      x: { stacked: true, grid: { display: false }, ticks: { color: '#5a6478', font: { family: 'Outfit', size: 10 } } },
+      y: { stacked: true, grid: { color: '#1a1f2c' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 }, callback: (v) => '$' + v } }
+    }
+  });
+
+  // Daily leads + CPL combo
+  makeChart('cLeads', 'bar', {
+    labels,
+    datasets: [
+      {
+        type: 'bar', label: 'Leads',
+        data: ts.leads.map(d => d.leads),
+        backgroundColor: '#52e6a1', borderRadius: 4, yAxisID: 'y'
+      },
+      {
+        type: 'line', label: 'CPL',
+        data: ts.leads.map(d => d.cpl > 0 ? d.cpl : null),
+        borderColor: '#f7b955', backgroundColor: '#f7b955', borderWidth: 2,
+        tension: 0.3, pointRadius: 3, yAxisID: 'y1', spanGaps: true
+      }
+    ]
+  }, {
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#5a6478', font: { family: 'Outfit', size: 10 } } },
+      y: { position: 'left', grid: { color: '#1a1f2c' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 } }, beginAtZero: true },
+      y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f7b955', font: { family: 'JetBrains Mono', size: 10 }, callback: (v) => '$' + v }, beginAtZero: true }
+    }
+  });
+
+  // BA Reach
+  makeChart('cReach', 'line', {
+    labels,
+    datasets: [{
+      label: 'BA Reach',
+      data: ts.ba.map(d => d.reach),
+      borderColor: '#a78bfa', backgroundColor: 'rgba(167,139,250,0.12)',
+      borderWidth: 2, tension: 0.3, fill: true, pointRadius: 0, pointHoverRadius: 4
+    }]
+  });
+
+  // BA Impressions vs CTR
+  makeChart('cBA', 'bar', {
+    labels,
+    datasets: [
+      {
+        type: 'bar', label: 'Impressions',
+        data: ts.ba.map(d => d.impressions),
+        backgroundColor: 'rgba(167,139,250,0.5)', borderRadius: 4, yAxisID: 'y'
+      },
+      {
+        type: 'line', label: 'CTR %',
+        data: ts.ba.map(d => d.ctr),
+        borderColor: '#f7b955', backgroundColor: '#f7b955', borderWidth: 2,
+        tension: 0.3, pointRadius: 3, yAxisID: 'y1'
+      }
+    ]
+  }, {
+    scales: {
+      x: { grid: { display: false }, ticks: { color: '#5a6478', font: { family: 'Outfit', size: 10 } } },
+      y: { position: 'left', grid: { color: '#1a1f2c' }, ticks: { color: '#5a6478', font: { family: 'JetBrains Mono', size: 10 } }, beginAtZero: true },
+      y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#f7b955', font: { family: 'JetBrains Mono', size: 10 }, callback: (v) => v + '%' }, beginAtZero: true }
+    }
+  });
+}
+
+// ============ TABLES ============
+function renderCampaignTable(tableId, campaigns, type) {
+  const t = $(`#${tableId}`);
+  if (!campaigns.length) {
+    t.innerHTML = `<tr><td colspan="9" style="text-align:center;color:var(--text-3);padding:24px">No ${type} campaigns in this period</td></tr>`;
+    return;
+  }
+
+  // Sort by spend desc
+  campaigns.sort((a, b) => b.spend - a.spend);
+
+  const isLeads = type === 'Leads';
+  const headers = isLeads
+    ? ['Campaign', 'Status', 'Days', 'Spend', 'Leads', 'CPL', 'Clicks', 'Impressions', 'CTR']
+    : ['Campaign', 'Status', 'Days', 'Spend', 'Reach', 'Impressions', 'Clicks', 'CTR', 'CPM'];
+
+  const thead = $(`#${tableId} thead`) || t;
+  const tbody = $(`#${tableId} tbody`) || t;
+
+  // Set headers
+  if (thead.tagName === 'THEAD') {
+    thead.innerHTML = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+  }
+
+  // Set rows
+  const rows = campaigns.map(c => {
+    const statusBadge = c.activeDays > 0
+      ? `<span class="badge badge-active">Active</span>`
+      : `<span class="badge badge-paused">Paused</span>`;
+
+    if (isLeads) {
+      const overTarget = c.cpl > DATA.config.targetCPL;
+      const cplClass = c.cpl > 0 ? (overTarget ? 'bad' : 'good') : 'muted';
+      return `
+        <tr>
+          <td class="name" title="${escapeHTML(c.campaignName)}">${escapeHTML(c.campaignName)}</td>
+          <td>${statusBadge}</td>
+          <td class="num muted">${c.activeDays}</td>
+          <td class="num">${fmtMoney(c.spend)}</td>
+          <td class="num">${c.leads}</td>
+          <td class="num ${cplClass}">${c.cpl > 0 ? fmtMoneyDec(c.cpl) : '—'}</td>
+          <td class="num muted">${fmtNum(c.clicks)}</td>
+          <td class="num muted">${fmtNum(c.impressions)}</td>
+          <td class="num muted">${fmtPct(c.ctr)}</td>
+        </tr>
+      `;
+    }
+    return `
+      <tr>
+        <td class="name" title="${escapeHTML(c.campaignName)}">${escapeHTML(c.campaignName)}</td>
+        <td>${statusBadge}</td>
+        <td class="num muted">${c.activeDays}</td>
+        <td class="num">${fmtMoney(c.spend)}</td>
+        <td class="num">${fmtNum(c.reach)}</td>
+        <td class="num">${fmtNum(c.impressions)}</td>
+        <td class="num muted">${fmtNum(c.clicks)}</td>
+        <td class="num muted">${fmtPct(c.ctr)}</td>
+        <td class="num muted">${fmtMoneyDec(c.cpm)}</td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.innerHTML = rows;
+}
+
+function renderTables() {
+  const camps = DATA.campaigns;
+  const leadsCamps = camps.filter(c => c.type === 'Leads');
+  const baCamps = camps.filter(c => c.type === 'BA');
+  const otherCamps = camps.filter(c => c.type === 'Other');
+
+  renderCampaignTable('tblLeadsCamps', leadsCamps, 'Leads');
+  renderCampaignTable('tblBACamps', baCamps, 'BA');
+
+  if (otherCamps.length) {
+    $('#otherSection').style.display = '';
+    renderCampaignTable('tblOtherCamps', otherCamps, 'Other');
+  } else {
+    $('#otherSection').style.display = 'none';
+  }
+}
+
+function renderRunsTable() {
+  const t = $('#tblRuns');
+  const thead = t.querySelector('thead');
+  const tbody = t.querySelector('tbody');
+
+  thead.innerHTML = '<tr><th>Campaign</th><th>Started</th><th>Ended</th><th>Days</th><th>Spend</th><th>Leads</th><th>CPL</th><th>vs Target</th></tr>';
+
+  const runs = DATA.leadRuns;
+  if (!runs || !runs.length) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--text-3);padding:24px">No lead campaign runs detected</td></tr>';
+    return;
+  }
+
+  const rows = runs.map(r => {
+    const overTarget = r.cpl > DATA.config.targetCPL;
+    const cplClass = r.cpl > 0 ? (overTarget ? 'bad' : 'good') : 'muted';
+    const vsTarget = r.cpl > 0
+      ? `<span class="num ${overTarget ? 'bad' : 'good'}">${overTarget ? '+' : ''}${(((r.cpl - DATA.config.targetCPL) / DATA.config.targetCPL) * 100).toFixed(0)}%</span>`
+      : '—';
+    return `
+      <tr>
+        <td class="name">${escapeHTML(r.campaignName)}</td>
+        <td>${fmtDate(r.startDate)}</td>
+        <td>${fmtDate(r.endDate)}</td>
+        <td class="num">${r.days}</td>
+        <td class="num">${fmtMoney(r.spend)}</td>
+        <td class="num">${r.leads}</td>
+        <td class="num ${cplClass}">${r.cpl > 0 ? fmtMoneyDec(r.cpl) : '—'}</td>
+        <td class="num">${vsTarget}</td>
+      </tr>
+    `;
+  }).join('');
+
+  tbody.innerHTML = rows;
+}
+
+function escapeHTML(s) {
+  if (!s) return '';
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+}
+
+// ============ ORCHESTRATION ============
+function renderAll() {
+  if (!DATA || !DATA.ok) return;
+  $('#periodRange').textContent = `${fmtDateLong(DATA.period.from)} – ${fmtDateLong(DATA.period.to)}`;
+  renderStatusBanner();
+  renderKPIs();
+  renderInsightCards();
+  renderMiniSparks();
+  renderMainCharts();
+  renderTables();
+  renderRunsTable();
+}
+
+async function loadAndRender(params = {}) {
+  $('#loader').classList.remove('hidden');
+  $('#app').classList.add('hidden');
+  try {
+    DATA = await fetchData(params);
+    if (DATA.empty) {
+      $('#app').classList.remove('hidden');
+      $('#loader').classList.add('hidden');
+      $('#statusBanner').innerHTML = `<div class="empty"><h3>No data yet</h3><p>Run /api/daily-pull or hit /api/backfill?start=YYYY-MM-DD&end=YYYY-MM-DD to seed the sheet.</p></div>`;
+      return;
+    }
+    renderAll();
+  } catch (err) {
+    $('#statusBanner').innerHTML = `<div class="empty"><h3>Could not load data</h3><p>${err.message}</p></div>`;
+  } finally {
+    $('#app').classList.remove('hidden');
+    $('#loader').classList.add('hidden');
+  }
+}
+
+// ============ FILTERS ============
+$$('.pill[data-period]').forEach(b => {
+  b.addEventListener('click', () => {
+    $$('.pill[data-period]').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    $('#dateFrom').value = '';
+    $('#dateTo').value = '';
+    const p = b.dataset.period;
+    if (p === 'ytd') {
+      const start = new Date(new Date().getUTCFullYear(), 0, 1).toISOString().split('T')[0];
+      const end = new Date().toISOString().split('T')[0];
+      loadAndRender({ start, end });
+    } else {
+      loadAndRender({ days: p });
+    }
+  });
+});
+
+$('#dateGo').addEventListener('click', () => {
+  const start = $('#dateFrom').value;
+  const end = $('#dateTo').value;
+  if (!start || !end) return;
+  $$('.pill[data-period]').forEach(x => x.classList.remove('on'));
+  loadAndRender({ start, end });
+});
+
+$$('.tab').forEach(b => {
+  b.addEventListener('click', () => {
+    $$('.tab').forEach(x => x.classList.remove('on'));
+    $$('.tp').forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+    $('#tp-' + b.dataset.t).classList.add('on');
+    // Re-render charts when switching to insights (canvas may have lost size)
+    if (b.dataset.t === 'insights') setTimeout(() => { renderMiniSparks(); renderMainCharts(); }, 50);
+  });
+});
+
+// Initial load
+loadAndRender({ days: 30 });
+</script>
 </body>
 </html>

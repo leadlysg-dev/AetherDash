@@ -1,24 +1,22 @@
-const { fetchMetaInsights } = require("./meta-fetcher");
-const { writeMetaRow } = require("./sheets-writer");
+const { fetchInsightsForDate } = require("./meta-fetcher");
+const { upsertInsightRows } = require("./sheets-writer");
 const { getYesterdaySGT } = require("./config");
 
 // ============================================================
 // DAILY PULL — runs at 7am SGT (23:00 UTC previous day)
-// Pulls yesterday's Meta Ads data → writes to Google Sheet
+// Pulls yesterday's campaign-level insights → writes to sheet
 // ============================================================
 
 exports.handler = async (event) => {
   try {
-    // Allow manual override via query string: ?date=2026-05-01
     const date = event.queryStringParameters?.date || getYesterdaySGT();
 
-    console.log(`[daily-pull] Pulling Meta data for ${date}`);
+    console.log(`[daily-pull] Pulling Meta campaign data for ${date}`);
 
-    const insights = await fetchMetaInsights(date);
-    console.log(`[daily-pull] Got insights:`, insights);
+    const insights = await fetchInsightsForDate(date);
+    console.log(`[daily-pull] Got ${insights.length} campaign rows for ${date}`);
 
-    const result = await writeMetaRow(insights);
-    console.log(`[daily-pull] Sheet write:`, result);
+    const result = await upsertInsightRows(insights);
 
     return {
       statusCode: 200,
@@ -26,8 +24,17 @@ exports.handler = async (event) => {
         {
           ok: true,
           date,
-          insights,
+          campaignCount: insights.length,
+          totalSpend: insights.reduce((s, r) => s + r.spend, 0).toFixed(2),
+          totalLeads: insights.reduce((s, r) => s + r.leads, 0),
           sheetWrite: result,
+          rows: insights.map((r) => ({
+            campaign: r.campaignName,
+            type: r.type,
+            spend: r.spend.toFixed(2),
+            leads: r.leads,
+            cpl: r.costPerLead.toFixed(2),
+          })),
         },
         null,
         2
@@ -42,7 +49,6 @@ exports.handler = async (event) => {
   }
 };
 
-// Scheduled: every day at 23:00 UTC = 7am SGT
 exports.config = {
   schedule: "0 23 * * *",
 };

@@ -1,8 +1,8 @@
-const { fetchMetaInsights } = require("./meta-fetcher");
-const { writeMetaRow } = require("./sheets-writer");
+const { fetchInsightsForDate } = require("./meta-fetcher");
+const { upsertInsightRows } = require("./sheets-writer");
 
 // ============================================================
-// BACKFILL — manual endpoint to pull a date range
+// BACKFILL — pull a date range
 // Usage: /api/backfill?start=2026-01-01&end=2026-05-05
 // ============================================================
 
@@ -15,9 +15,7 @@ function* dateRange(start, end) {
   }
 }
 
-async function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
-}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 exports.handler = async (event) => {
   try {
@@ -34,28 +32,28 @@ exports.handler = async (event) => {
 
     console.log(`[backfill] Range: ${start} → ${end}`);
 
-    const results = [];
+    let totalCampaignRows = 0;
     let success = 0;
     let failed = 0;
+    const results = [];
 
     for (const date of dateRange(start, end)) {
       try {
-        const insights = await fetchMetaInsights(date);
-        const writeResult = await writeMetaRow(insights);
+        const insights = await fetchInsightsForDate(date);
+        await upsertInsightRows(insights);
+        totalCampaignRows += insights.length;
+        success++;
         results.push({
           date,
           ok: true,
-          spend: insights.spend,
-          clicks: insights.clicks,
-          action: writeResult.action,
+          campaigns: insights.length,
+          spend: insights.reduce((s, r) => s + r.spend, 0).toFixed(2),
+          leads: insights.reduce((s, r) => s + r.leads, 0),
         });
-        success++;
-        // Be polite to Meta API — small delay
-        await sleep(300);
+        await sleep(250);
       } catch (err) {
-        console.error(`[backfill] ${date} failed:`, err.message);
-        results.push({ date, ok: false, error: err.message });
         failed++;
+        results.push({ date, ok: false, error: err.message });
       }
     }
 
@@ -68,6 +66,7 @@ exports.handler = async (event) => {
           totalDays: results.length,
           success,
           failed,
+          totalCampaignRows,
           results,
         },
         null,

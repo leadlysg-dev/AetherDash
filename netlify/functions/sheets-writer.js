@@ -2,43 +2,29 @@ const { google } = require("googleapis");
 const { CONFIG, getServiceAccountCredentials } = require("./config");
 
 // ============================================================
-// GOOGLE SHEETS WRITER
-// Handles auth, ensures tab exists, upserts rows by date
+// SHEETS WRITER — campaign-level (one row per campaign per day)
 // ============================================================
 
 async function getSheetsClient() {
   const creds = getServiceAccountCredentials();
-  const auth = new google.auth.JWT(
-    creds.client_email,
-    null,
-    creds.private_key,
-    ["https://www.googleapis.com/auth/spreadsheets"]
-  );
+  const auth = new google.auth.JWT(creds.client_email, null, creds.private_key, [
+    "https://www.googleapis.com/auth/spreadsheets",
+  ]);
   await auth.authorize();
   return google.sheets({ version: "v4", auth });
 }
 
 async function ensureTabExists(sheets, sheetId, tabName, headers) {
-  // Check if tab already exists
   const meta = await sheets.spreadsheets.get({ spreadsheetId: sheetId });
   const exists = meta.data.sheets.some((s) => s.properties.title === tabName);
 
   if (!exists) {
-    // Create the tab
     await sheets.spreadsheets.batchUpdate({
       spreadsheetId: sheetId,
       requestBody: {
-        requests: [
-          {
-            addSheet: {
-              properties: { title: tabName },
-            },
-          },
-        ],
+        requests: [{ addSheet: { properties: { title: tabName } } }],
       },
     });
-
-    // Add header row
     await sheets.spreadsheets.values.update({
       spreadsheetId: sheetId,
       range: `${tabName}!A1`,
@@ -48,46 +34,8 @@ async function ensureTabExists(sheets, sheetId, tabName, headers) {
   }
 }
 
-async function upsertRowByDate(sheets, sheetId, tabName, dateStr, rowValues) {
-  // Read existing dates (column A) to find if this date already has a row
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId: sheetId,
-    range: `${tabName}!A:A`,
-  });
-
-  const existing = res.data.values || [];
-  let foundRowIndex = -1;
-  for (let i = 1; i < existing.length; i++) {
-    // skip header row at i=0
-    if (existing[i][0] === dateStr) {
-      foundRowIndex = i + 1; // 1-indexed for Sheets
-      break;
-    }
-  }
-
-  if (foundRowIndex > 0) {
-    // Update existing row
-    await sheets.spreadsheets.values.update({
-      spreadsheetId: sheetId,
-      range: `${tabName}!A${foundRowIndex}`,
-      valueInputOption: "RAW",
-      requestBody: { values: [rowValues] },
-    });
-    return { action: "updated", row: foundRowIndex };
-  } else {
-    // Append new row
-    await sheets.spreadsheets.values.append({
-      spreadsheetId: sheetId,
-      range: `${tabName}!A:A`,
-      valueInputOption: "RAW",
-      insertDataOption: "INSERT_ROWS",
-      requestBody: { values: [rowValues] },
-    });
-    return { action: "appended" };
-  }
-}
-
-async function readAllRows(sheets, sheetId, tabName) {
+// Returns all rows including header
+async function readAll(sheets, sheetId, tabName) {
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
     range: `${tabName}!A:Z`,
@@ -95,31 +43,93 @@ async function readAllRows(sheets, sheetId, tabName) {
   return res.data.values || [];
 }
 
-async function writeMetaRow(insights) {
+function rowFromInsight(i) {
+  return [
+    i.date,
+    i.campaignId,
+    i.campaignName,
+    i.objective,
+    i.type,
+    i.status,
+    i.spend,
+    i.impressions,
+    i.reach,
+    i.frequency,
+    i.clicks,
+    i.cpm,
+    i.ctr,
+    i.cpc,
+    i.leads,
+    i.costPerLead,
+  ];
+}
+
+// Upsert by composite key Date + CampaignID
+async function upsertInsightRows(insights) {
+  if (!insights.length) return { written: 0, deleted: 0, written_rows: 0 };
+
   const sheets = await getSheetsClient();
   const tabName = CONFIG.sheet.metaTab;
-
   await ensureTabExists(sheets, CONFIG.google.sheetId, tabName, CONFIG.sheet.headers);
 
-  const row = [
-    insights.date,
-    insights.spend,
-    insights.impressions,
-    insights.clicks,
-    insights.cpm,
-    insights.ctr,
-    insights.cpc,
-    insights.conversions,
-    insights.costPerConversion,
-  ];
+  const all = await readAll(sheets, CONFIG.google.sheetId, tabName);
 
-  return upsertRowByDate(sheets, CONFIG.google.sheetId, tabName, insights.date, row);
+  // Build set of incoming keys
+  const incomingKeys = new Set(insights.map((i) => `${i.date}|${i.campaignId}`));
+
+  // Find existing rows that match incoming keys → mark for deletion
+  const rowsToDelete = []; // 1-indexed row numbers
+  for (let r = 1; r < all.length; r++) {
+    const row = all[r];
+    const key = `${row[0]}|${row[1]}`;
+    if (incomingKeys.has(key)) rowsToDelete.push(r + 1); // sheet row numbers (1-indexed)
+  }
+
+  // Delete rows in DESCENDING order to avoid index shift
+  if (rowsToDelete.length) {
+    const sheetMeta = await sheets.spreadsheets.get({
+      spreadsheetId: CONFIG.google.sheetId,
+    });
+    const sheetTab = sheetMeta.data.sheets.find(
+      (s) => s.properties.title === tabName
+    );
+    const sheetGid = sheetTab.properties.sheetId;
+
+    const requests = rowsToDelete
+      .sort((a, b) => b - a)
+      .map((rowNum) => ({
+        deleteDimension: {
+          range: {
+            sheetId: sheetGid,
+            dimension: "ROWS",
+            startIndex: rowNum - 1,
+            endIndex: rowNum,
+          },
+        },
+      }));
+
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: CONFIG.google.sheetId,
+      requestBody: { requests },
+    });
+  }
+
+  // Append fresh rows
+  const values = insights.map(rowFromInsight);
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: CONFIG.google.sheetId,
+    range: `${tabName}!A:A`,
+    valueInputOption: "RAW",
+    insertDataOption: "INSERT_ROWS",
+    requestBody: { values },
+  });
+
+  return { written: values.length, deleted: rowsToDelete.length };
 }
 
 async function readMetaData() {
   const sheets = await getSheetsClient();
-  const tabName = CONFIG.sheet.metaTab;
-  return readAllRows(sheets, CONFIG.google.sheetId, tabName);
+  return readAll(sheets, CONFIG.google.sheetId, CONFIG.sheet.metaTab);
 }
 
-module.exports = { writeMetaRow, readMetaData, getSheetsClient };
+module.exports = { upsertInsightRows, readMetaData, getSheetsClient };
