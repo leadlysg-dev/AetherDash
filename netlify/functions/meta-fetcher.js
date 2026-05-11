@@ -2,11 +2,10 @@ const fetch = require("node-fetch");
 const { CONFIG, classifyCampaign } = require("./config");
 
 // ============================================================
-// META FETCHER — AD LEVEL
-// One row per ad per day
+// META FETCHER — CAMPAIGN LEVEL (one row per campaign per day)
 // ============================================================
 
-// Three non-overlapping lead action types
+// 3 non-overlapping lead action types
 const LEAD_ACTION_TYPES = [
   "lead",
   "offsite_conversion.fb_pixel_lead",
@@ -24,7 +23,6 @@ function sumLeadActions(actions) {
   return total;
 }
 
-// Paginated fetch helper — follows next links
 async function fetchAllPaged(url) {
   const all = [];
   let next = url;
@@ -38,32 +36,19 @@ async function fetchAllPaged(url) {
   return all;
 }
 
-// Map: campaign_id → { id, name, objective }
-async function fetchCampaigns() {
+// campaign metadata: id → { effective_status }
+async function fetchCampaignsMeta() {
   const { accessToken, adAccountId, apiVersion } = CONFIG.meta;
   const params = new URLSearchParams({
     access_token: accessToken,
-    fields: "id,name,objective",
+    fields: "id,name,objective,effective_status,status",
     limit: "500",
   });
   const url = `https://graph.facebook.com/${apiVersion}/${adAccountId}/campaigns?${params}`;
   return fetchAllPaged(url);
 }
 
-// Map: ad_id → { effective_status, status }
-async function fetchAds() {
-  const { accessToken, adAccountId, apiVersion } = CONFIG.meta;
-  const params = new URLSearchParams({
-    access_token: accessToken,
-    fields: "id,effective_status,status",
-    limit: "500",
-  });
-  const url = `https://graph.facebook.com/${apiVersion}/${adAccountId}/ads?${params}`;
-  return fetchAllPaged(url);
-}
-
-// Insights at ad level for a single date
-async function fetchAdInsightsForDate(date) {
+async function fetchCampaignInsightsForDate(date) {
   const { accessToken, adAccountId, apiVersion } = CONFIG.meta;
 
   if (!accessToken) throw new Error("META_ACCESS_TOKEN env var is missing");
@@ -72,10 +57,7 @@ async function fetchAdInsightsForDate(date) {
   const fields = [
     "campaign_id",
     "campaign_name",
-    "adset_id",
-    "adset_name",
-    "ad_id",
-    "ad_name",
+    "objective",
     "spend",
     "impressions",
     "reach",
@@ -90,7 +72,7 @@ async function fetchAdInsightsForDate(date) {
   const params = new URLSearchParams({
     access_token: accessToken,
     fields,
-    level: "ad",
+    level: "campaign",
     time_range: JSON.stringify({ since: date, until: date }),
     limit: "500",
   });
@@ -100,21 +82,18 @@ async function fetchAdInsightsForDate(date) {
 }
 
 async function fetchInsightsForDate(date) {
-  const [campaigns, ads, rows] = await Promise.all([
-    fetchCampaigns(),
-    fetchAds(),
-    fetchAdInsightsForDate(date),
+  const [campaigns, rows] = await Promise.all([
+    fetchCampaignsMeta(),
+    fetchCampaignInsightsForDate(date),
   ]);
 
   const campMap = new Map(campaigns.map((c) => [c.id, c]));
-  const adMap = new Map(ads.map((a) => [a.id, a]));
 
   const result = [];
   for (const r of rows) {
     const camp = campMap.get(r.campaign_id) || {};
-    const ad = adMap.get(r.ad_id) || {};
-    const objective = camp.objective || "UNKNOWN";
-    const status = ad.effective_status || ad.status || "UNKNOWN";
+    const objective = r.objective || camp.objective || "UNKNOWN";
+    const status = camp.effective_status || camp.status || "UNKNOWN";
     const type = classifyCampaign(objective, r.campaign_name);
 
     const spend = parseFloat(r.spend) || 0;
@@ -125,10 +104,6 @@ async function fetchInsightsForDate(date) {
       date,
       campaignId: r.campaign_id,
       campaignName: r.campaign_name,
-      adSetId: r.adset_id,
-      adSetName: r.adset_name,
-      adId: r.ad_id,
-      adName: r.ad_name,
       objective,
       type,
       status,
@@ -148,4 +123,4 @@ async function fetchInsightsForDate(date) {
   return result;
 }
 
-module.exports = { fetchInsightsForDate, fetchCampaigns, fetchAds };
+module.exports = { fetchInsightsForDate };

@@ -24,24 +24,17 @@ exports.handler = async (event) => {
         {
           ok: true,
           date,
-          adRows: insights.length,
-          uniqueCampaigns: new Set(insights.map((r) => r.campaignId)).size,
-          uniqueAdSets: new Set(insights.map((r) => r.adSetId)).size,
-          uniqueAds: new Set(insights.map((r) => r.adId)).size,
+          campaignCount: insights.length,
           totalSpend: insights.reduce((s, r) => s + r.spend, 0).toFixed(2),
           totalLeads: insights.reduce((s, r) => s + r.leads, 0),
           sheetWrite: result,
-          // Top 5 ads by spend for visual confirmation
-          topAds: insights
-            .sort((a, b) => b.spend - a.spend)
-            .slice(0, 5)
-            .map((r) => ({
-              ad: r.adName,
-              type: r.type,
-              spend: r.spend.toFixed(2),
-              leads: r.leads,
-              cpl: r.costPerLead.toFixed(2),
-            })),
+          rows: insights.map((r) => ({
+            campaign: r.campaignName,
+            type: r.type,
+            spend: r.spend.toFixed(2),
+            leads: r.leads,
+            cpl: r.costPerLead.toFixed(2),
+          })),
         },
         null,
         2

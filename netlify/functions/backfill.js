@@ -32,7 +32,7 @@ exports.handler = async (event) => {
 
     console.log(`[backfill] Range: ${start} → ${end}`);
 
-    let totalAdRows = 0;
+    let totalCampaignRows = 0;
     let success = 0;
     let failed = 0;
     const results = [];
@@ -41,12 +41,12 @@ exports.handler = async (event) => {
       try {
         const insights = await fetchInsightsForDate(date);
         await upsertInsightRows(insights);
-        totalAdRows += insights.length;
+        totalCampaignRows += insights.length;
         success++;
         results.push({
           date,
           ok: true,
-          adRows: insights.length,
+          campaigns: insights.length,
           spend: insights.reduce((s, r) => s + r.spend, 0).toFixed(2),
           leads: insights.reduce((s, r) => s + r.leads, 0),
         });
@@ -66,7 +66,7 @@ exports.handler = async (event) => {
           totalDays: results.length,
           success,
           failed,
-          totalAdRows,
+          totalCampaignRows,
           results,
         },
         null,

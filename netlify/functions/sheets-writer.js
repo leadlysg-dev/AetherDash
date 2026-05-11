@@ -48,10 +48,6 @@ function rowFromInsight(i) {
     i.date,
     i.campaignId,
     i.campaignName,
-    i.adSetId,
-    i.adSetName,
-    i.adId,
-    i.adName,
     i.objective,
     i.type,
     i.status,
@@ -68,9 +64,9 @@ function rowFromInsight(i) {
   ];
 }
 
-// Upsert by composite key Date + Ad ID (column A + column F)
+// Upsert by composite key: Date + Campaign ID (cols A + B)
 async function upsertInsightRows(insights) {
-  if (!insights.length) return { written: 0, deleted: 0, written_rows: 0 };
+  if (!insights.length) return { written: 0, deleted: 0 };
 
   const sheets = await getSheetsClient();
   const tabName = CONFIG.sheet.metaTab;
@@ -78,15 +74,12 @@ async function upsertInsightRows(insights) {
 
   const all = await readAll(sheets, CONFIG.google.sheetId, tabName);
 
-  // Build set of incoming keys (Date|Ad ID)
-  const incomingKeys = new Set(insights.map((i) => `${i.date}|${i.adId}`));
+  const incomingKeys = new Set(insights.map((i) => `${i.date}|${i.campaignId}`));
 
-  // Find existing rows with matching keys → delete
-  // Date is column A (index 0), Ad ID is column F (index 5)
   const rowsToDelete = [];
   for (let r = 1; r < all.length; r++) {
     const row = all[r];
-    const key = `${row[0]}|${row[5]}`;
+    const key = `${row[0]}|${row[1]}`;
     if (incomingKeys.has(key)) rowsToDelete.push(r + 1);
   }
 

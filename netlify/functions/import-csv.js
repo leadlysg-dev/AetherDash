@@ -2,8 +2,8 @@ const { upsertInsightRows } = require("./sheets-writer");
 const { classifyCampaign } = require("./config");
 
 // ============================================================
-// /api/import-csv — Meta CSV at AD level with Day breakdown
-// Parses, classifies, writes to META RAW (ad-level)
+// /api/import-csv — Meta CSV with Day breakdown (campaign level)
+// Aggregates ad-set or ad-level rows up to campaign × day
 // ============================================================
 
 function parseCSV(text) {
@@ -91,21 +91,13 @@ exports.handler = async (event) => {
     if (rows.length < 2) throw new Error("CSV has no data rows");
 
     const headers = rows[0];
-
-    // Required ad-level columns
     const dayIdx = findCol(headers, ["Day"]);
     const startIdx = findCol(headers, ["Reporting starts"]);
     const endIdx = findCol(headers, ["Reporting ends"]);
-    const adIdIdx = findCol(headers, ["Ad ID"]);
-    const adNameIdx = findCol(headers, ["Ad name", "Ad Name"]);
-    const adsetIdIdx = findCol(headers, ["Ad set ID", "Ad Set ID"]);
-    const adsetNameIdx = findCol(headers, ["Ad set name", "Ad Set Name"]);
     const campIdIdx = findCol(headers, ["Campaign ID"]);
     const campNameIdx = findCol(headers, ["Campaign name", "Campaign Name"]);
     const objectiveIdx = findCol(headers, ["Objective"]);
-    const statusIdx = findCol(headers, ["Ad delivery", "Delivery", "Campaign delivery"]);
-
-    // Metrics
+    const statusIdx = findCol(headers, ["Campaign delivery", "Delivery", "Ad set delivery", "Ad delivery"]);
     const spendIdx = findCol(headers, ["Amount spent (SGD)", "Amount spent (USD)", "Amount spent", "Spend"]);
     const imprIdx = findCol(headers, ["Impressions"]);
     const reachIdx = findCol(headers, ["Reach"]);
@@ -117,22 +109,17 @@ exports.handler = async (event) => {
     const leadsIdx = findCol(headers, ["Leads"]);
     const msgConvIdx = findCol(headers, ["Messaging conversations started"]);
 
-    // Validate
-    if (adNameIdx < 0 && adIdIdx < 0) {
-      throw new Error('CSV is not at AD level. Re-export from Meta Ads Manager: top tabs → Ads → Breakdown by Time → Day. Must include "Ad name" and "Ad ID" columns.');
-    }
     if (campNameIdx < 0) throw new Error('CSV missing "Campaign name" column');
 
     if (dayIdx < 0) {
-      if (startIdx >= 0 && endIdx >= 0 && rows[1] && rows[1][startIdx] !== rows[1][endIdx]) {
+      const sample = rows[1];
+      if (startIdx >= 0 && endIdx >= 0 && sample && sample[startIdx] !== sample[endIdx]) {
         throw new Error('CSV is aggregated. Re-export with "Day" time breakdown enabled.');
       }
     }
 
-    // Each row already at ad-day granularity (no aggregation needed)
-    const insights = [];
-    let skippedNoSpend = 0;
-    let skippedNoData = 0;
+    // Group by (date, campaignId) — aggregates ad-set/ad rows up to campaign × day
+    const grouped = new Map();
 
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
@@ -140,74 +127,78 @@ exports.handler = async (event) => {
 
       const dateRaw = dayIdx >= 0 ? r[dayIdx] : r[startIdx];
       const date = normalizeDate(dateRaw);
-      if (!date) {
-        skippedNoData++;
-        continue;
-      }
-
-      const adName = (r[adNameIdx] || "").trim();
-      const adId = adIdIdx >= 0 ? (r[adIdIdx] || "").trim() : adName;
-      if (!adName && !adId) {
-        skippedNoData++;
-        continue;
-      }
-
-      const spend = num(r[spendIdx]);
-      const impressions = Math.round(num(r[imprIdx]));
-      const reach = Math.round(num(r[reachIdx]));
-
-      if (spend === 0 && impressions === 0 && reach === 0) {
-        skippedNoSpend++;
-        continue;
-      }
+      if (!date) continue;
 
       const campaignName = (r[campNameIdx] || "").trim();
+      if (!campaignName) continue;
       const campaignId = campIdIdx >= 0 ? (r[campIdIdx] || "").trim() : campaignName;
-      const adSetName = adsetNameIdx >= 0 ? (r[adsetNameIdx] || "").trim() : "";
-      const adSetId = adsetIdIdx >= 0 ? (r[adsetIdIdx] || "").trim() : "";
-      const objective = objectiveIdx >= 0 ? (r[objectiveIdx] || "").trim() : "";
-      const status = statusIdx >= 0 ? (r[statusIdx] || "").trim() : "";
+      const key = `${date}|${campaignId}`;
 
-      const formLeads = num(r[leadsIdx]);
-      const msgConvs = num(r[msgConvIdx]);
-      const leads = Math.round(formLeads + msgConvs);
+      if (!grouped.has(key)) {
+        grouped.set(key, {
+          date,
+          campaignId,
+          campaignName,
+          objective: objectiveIdx >= 0 ? (r[objectiveIdx] || "").trim() : "",
+          status: statusIdx >= 0 ? (r[statusIdx] || "").trim() : "",
+          spend: 0,
+          impressions: 0,
+          reach: 0,
+          freqSum: 0,
+          freqCount: 0,
+          clicks: 0,
+          leads: 0,
+        });
+      }
 
-      const frequency = num(r[freqIdx]);
-      const clicks = Math.round(num(r[clicksIdx]));
-      const cpm = num(r[cpmIdx]);
-      const ctr = num(r[ctrIdx]);
-      const cpc = num(r[cpcIdx]);
-      const cpl = leads > 0 ? spend / leads : 0;
+      const g = grouped.get(key);
+      g.spend += num(r[spendIdx]);
+      g.impressions += num(r[imprIdx]);
+      g.reach += num(r[reachIdx]);
+      const f = num(r[freqIdx]);
+      if (f > 0) {
+        g.freqSum += f;
+        g.freqCount++;
+      }
+      g.clicks += num(r[clicksIdx]);
+      g.leads += num(r[leadsIdx]);
+      g.leads += num(r[msgConvIdx]);
+    }
 
-      const type = classifyCampaign(objective, campaignName);
+    const insights = [];
+    for (const g of grouped.values()) {
+      if (g.spend === 0 && g.impressions === 0 && g.reach === 0) continue;
+
+      const cpm = g.impressions > 0 ? (g.spend / g.impressions) * 1000 : 0;
+      const ctr = g.impressions > 0 ? (g.clicks / g.impressions) * 100 : 0;
+      const cpc = g.clicks > 0 ? g.spend / g.clicks : 0;
+      const cpl = g.leads > 0 ? g.spend / g.leads : 0;
+      const freq = g.freqCount > 0 ? g.freqSum / g.freqCount : 0;
+      const type = classifyCampaign(g.objective, g.campaignName);
 
       insights.push({
-        date,
-        campaignId,
-        campaignName,
-        adSetId,
-        adSetName,
-        adId,
-        adName,
-        objective,
+        date: g.date,
+        campaignId: g.campaignId,
+        campaignName: g.campaignName,
+        objective: g.objective,
         type,
-        status,
-        spend: Math.round(spend * 100) / 100,
-        impressions,
-        reach,
-        frequency: Math.round(frequency * 100000) / 100000,
-        clicks,
+        status: g.status || "ACTIVE",
+        spend: Math.round(g.spend * 100) / 100,
+        impressions: Math.round(g.impressions),
+        reach: Math.round(g.reach),
+        frequency: Math.round(freq * 100000) / 100000,
+        clicks: Math.round(g.clicks),
         cpm: Math.round(cpm * 100) / 100,
         ctr: Math.round(ctr * 100) / 100,
         cpc: Math.round(cpc * 100) / 100,
-        leads,
+        leads: Math.round(g.leads),
         costPerLead: Math.round(cpl * 100) / 100,
       });
     }
 
     insights.sort((a, b) => {
       if (a.date !== b.date) return a.date < b.date ? -1 : 1;
-      return a.adName < b.adName ? -1 : 1;
+      return a.campaignName < b.campaignName ? -1 : 1;
     });
 
     const CHUNK = 250;
@@ -234,17 +225,13 @@ exports.handler = async (event) => {
         {
           ok: true,
           summary: {
-            adRowsWritten: written,
-            adRowsReplaced: deleted,
-            uniqueAds: new Set(insights.map((r) => r.adId)).size,
-            uniqueAdSets: new Set(insights.map((r) => r.adSetId)).size,
+            rowsWritten: written,
+            rowsReplaced: deleted,
             uniqueCampaigns: new Set(insights.map((r) => r.campaignId)).size,
             dateRange: dates.length ? `${dates[0]} → ${dates[dates.length - 1]}` : "n/a",
             totalSpend: totalSpend.toFixed(2),
             totalLeads,
             byType,
-            skippedNoSpend,
-            skippedNoData,
           },
         },
         null,

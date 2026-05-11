@@ -257,9 +257,7 @@ footer a{color:var(--text-ter);text-decoration:none}footer a:hover{color:var(--g
   <!-- TABS -->
   <div class="tabs" id="tabBar">
     <button class="tab on" data-t="insights">Insights</button>
-    <button class="tab" data-t="breakdown">Campaigns</button>
-    <button class="tab" data-t="adsets">Ad Sets</button>
-    <button class="tab" data-t="ads">Ads</button>
+    <button class="tab" data-t="breakdown">Campaign Breakdown</button>
     <button class="tab" data-t="runs">Lead Campaign History</button>
   </div>
 
@@ -324,28 +322,6 @@ footer a{color:var(--text-ter);text-decoration:none}footer a:hover{color:var(--g
     </div>
 
     <div class="insight-row-perf" id="insPerfCards"></div>
-  </div>
-
-  <!-- AD SETS -->
-  <div class="tp" id="tp-adsets">
-    <div class="tbl-section">
-      <div class="tbl-title">
-        Ad Sets — performance rollup
-        <span style="color:var(--text-ter);font-weight:400;font-size:.72rem">(filter by Type above)</span>
-      </div>
-      <div class="tbl-wrap"><table id="tblAdSets"><thead></thead><tbody></tbody></table></div>
-    </div>
-  </div>
-
-  <!-- ADS -->
-  <div class="tp" id="tp-ads">
-    <div class="tbl-section">
-      <div class="tbl-title">
-        Ads — every individual creative
-        <span style="color:var(--text-ter);font-weight:400;font-size:.72rem">(sorted by spend, click headers to re-sort)</span>
-      </div>
-      <div class="tbl-wrap"><table id="tblAds"><thead></thead><tbody></tbody></table></div>
-    </div>
   </div>
 
   <!-- LEAD CAMPAIGN HISTORY -->
@@ -743,28 +719,18 @@ function renderInsights() {
   $('#insPerfCards').innerHTML = perfHTML;
 }
 
-// ===== AGGREGATIONS =====
-function aggregateBy(rows, keyField, nameField, extraFields = {}) {
+// ===== TABLES =====
+function aggregateCampaigns(rows) {
   const map = new Map();
   for (const r of rows) {
-    const k = r[keyField];
-    if (!k) continue;
+    const k = r['Campaign ID'];
     if (!map.has(k)) {
-      const init = {
-        id: k,
-        name: r[nameField] || k,
-        type: r.Type,
-        status: r.Status,
-        spend: 0,
-        impressions: 0,
-        reach: 0,
-        clicks: 0,
-        leads: 0,
-        activeDays: new Set(),
-      };
-      // Extra fields to capture (e.g., campaign name for ad set rows)
-      for (const [k2, src] of Object.entries(extraFields)) init[k2] = r[src] || "";
-      map.set(k, init);
+      map.set(k, {
+        campaignId: r['Campaign ID'], campaignName: r['Campaign Name'],
+        type: r.Type, status: r.Status,
+        spend: 0, impressions: 0, reach: 0, clicks: 0, leads: 0,
+        days: new Map()
+      });
     }
     const c = map.get(k);
     c.spend += r.Spend;
@@ -772,29 +738,17 @@ function aggregateBy(rows, keyField, nameField, extraFields = {}) {
     c.reach = Math.max(c.reach, r.Reach);
     c.clicks += r.Clicks;
     c.leads += r.Leads;
-    if (r.Spend > 0) c.activeDays.add(r.Date);
+    c.days.set(r.Date, r);
   }
-  return Array.from(map.values()).map((c) => ({
+  return Array.from(map.values()).map(c => ({
     ...c,
-    activeDays: c.activeDays.size,
+    activeDays: Array.from(c.days.values()).filter(d => d.Spend > 0).length,
+    days: Array.from(c.days.values()).sort((a, b) => b.Date < a.Date ? -1 : 1),
     cpl: c.leads > 0 ? c.spend / c.leads : 0,
     ctr: c.impressions > 0 ? (c.clicks / c.impressions) * 100 : 0,
     cpc: c.clicks > 0 ? c.spend / c.clicks : 0,
     cpm: c.impressions > 0 ? (c.spend / c.impressions) * 1000 : 0,
   })).sort((a, b) => b.spend - a.spend);
-}
-
-function aggregateCampaigns(rows) {
-  return aggregateBy(rows, "Campaign ID", "Campaign Name");
-}
-function aggregateAdSets(rows) {
-  return aggregateBy(rows, "Ad Set ID", "Ad Set Name", { campaignName: "Campaign Name" });
-}
-function aggregateAds(rows) {
-  return aggregateBy(rows, "Ad ID", "Ad Name", {
-    campaignName: "Campaign Name",
-    adSetName: "Ad Set Name",
-  });
 }
 
 function renderTables() {
@@ -805,12 +759,11 @@ function renderTables() {
   const baRows = cur.filter(r => r.Type === 'BA');
   const otherRows = cur.filter(r => r.Type === 'Other');
 
-  // Show/hide sections based on type filter
   $('#leadsSection').style.display = (S.type === 'all' || S.type === 'Leads') && leadsRows.length ? '' : 'none';
   $('#baSection').style.display = (S.type === 'all' || S.type === 'BA') && baRows.length ? '' : 'none';
   $('#otherSection').style.display = (S.type === 'all' || S.type === 'Other') && otherRows.length ? '' : 'none';
 
-  // LEADS CAMPAIGNS TABLE
+  // LEADS TABLE
   const leadsCamps = aggregateCampaigns(leadsRows);
   const hLeads = `<tr><th>Campaign</th><th>Status</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">Clicks</th><th class="num">Impr.</th><th class="num">CTR</th></tr>`;
   let bLeads = '';
@@ -818,81 +771,57 @@ function renderTables() {
     const overT = c.cpl > CONFIG.targetCPL;
     const cplCls = c.cpl > 0 ? (overT ? 'bad' : 'good') : '';
     const stBadge = c.activeDays > 0 ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-paused">Paused</span>`;
-    bLeads += `<tr><td class="cname" title="${escHTML(c.name)}">${escHTML(c.name)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${c.leads}</td><td class="num ${cplCls}">${c.cpl > 0 ? fmt(c.cpl) : '–'}</td><td class="num">${fN(c.clicks)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${c.ctr.toFixed(2)}%</td></tr>`;
+    bLeads += `<tr class="camp-row" data-camp="L-${c.campaignId}"><td class="cname" title="${escHTML(c.campaignName)}">${escHTML(c.campaignName)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${c.leads}</td><td class="num ${cplCls}">${c.cpl > 0 ? fmt(c.cpl) : '–'}</td><td class="num">${fN(c.clicks)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${c.ctr.toFixed(2)}%</td></tr>`;
+    for (const d of c.days) {
+      const dCpl = d.Leads > 0 ? d.Spend / d.Leads : 0;
+      const dCplCls = dCpl > 0 ? (dCpl > CONFIG.targetCPL ? 'bad' : 'good') : '';
+      bLeads += `<tr class="day-row" data-parent="L-${c.campaignId}"><td>${fD(d.Date)}</td><td></td><td></td><td class="num">${fmt(d.Spend)}</td><td class="num">${d.Leads}</td><td class="num ${dCplCls}">${dCpl > 0 ? fmt(dCpl) : '–'}</td><td class="num">${fN(d.Clicks)}</td><td class="num">${fN(d.Impressions)}</td><td class="num">${d.CTR.toFixed(2)}%</td></tr>`;
+    }
   }
   $('#tblLeads thead').innerHTML = hLeads;
   $('#tblLeads tbody').innerHTML = bLeads || `<tr><td colspan="9" class="tbl-empty">No lead campaigns in this period</td></tr>`;
 
-  // BA CAMPAIGNS TABLE
+  // BA TABLE
   const baCamps = aggregateCampaigns(baRows);
   const hBA = `<tr><th>Campaign</th><th>Status</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Reach</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">CTR</th><th class="num">CPM</th></tr>`;
   let bBA = '';
   for (const c of baCamps) {
     const stBadge = c.activeDays > 0 ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-paused">Paused</span>`;
-    bBA += `<tr><td class="cname" title="${escHTML(c.name)}">${escHTML(c.name)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${fN(c.reach)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${fN(c.clicks)}</td><td class="num">${c.ctr.toFixed(2)}%</td><td class="num">${fmt(c.cpm)}</td></tr>`;
+    bBA += `<tr class="camp-row" data-camp="B-${c.campaignId}"><td class="cname" title="${escHTML(c.campaignName)}">${escHTML(c.campaignName)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${fN(c.reach)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${fN(c.clicks)}</td><td class="num">${c.ctr.toFixed(2)}%</td><td class="num">${fmt(c.cpm)}</td></tr>`;
+    for (const d of c.days) {
+      bBA += `<tr class="day-row" data-parent="B-${c.campaignId}"><td>${fD(d.Date)}</td><td></td><td></td><td class="num">${fmt(d.Spend)}</td><td class="num">${fN(d.Reach)}</td><td class="num">${fN(d.Impressions)}</td><td class="num">${fN(d.Clicks)}</td><td class="num">${d.CTR.toFixed(2)}%</td><td class="num">${fmt(d.CPM)}</td></tr>`;
+    }
   }
   $('#tblBA thead').innerHTML = hBA;
   $('#tblBA tbody').innerHTML = bBA || `<tr><td colspan="9" class="tbl-empty">No brand awareness campaigns in this period</td></tr>`;
 
-  // OTHER
+  // OTHER TABLE
   if (otherRows.length) {
     const otherCamps = aggregateCampaigns(otherRows);
     const hO = `<tr><th>Campaign</th><th>Status</th><th class="num">Days</th><th class="num">Spend</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">Leads</th><th class="num">CTR</th></tr>`;
     let bO = '';
     for (const c of otherCamps) {
       const stBadge = c.activeDays > 0 ? `<span class="badge badge-active">Active</span>` : `<span class="badge badge-paused">Paused</span>`;
-      bO += `<tr><td class="cname" title="${escHTML(c.name)}">${escHTML(c.name)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${fN(c.clicks)}</td><td class="num">${c.leads}</td><td class="num">${c.ctr.toFixed(2)}%</td></tr>`;
+      bO += `<tr class="camp-row" data-camp="O-${c.campaignId}"><td class="cname" title="${escHTML(c.campaignName)}">${escHTML(c.campaignName)}</td><td>${stBadge}</td><td class="num">${c.activeDays}</td><td class="num">${fmt(c.spend)}</td><td class="num">${fN(c.impressions)}</td><td class="num">${fN(c.clicks)}</td><td class="num">${c.leads}</td><td class="num">${c.ctr.toFixed(2)}%</td></tr>`;
+      for (const d of c.days) {
+        bO += `<tr class="day-row" data-parent="O-${c.campaignId}"><td>${fD(d.Date)}</td><td></td><td></td><td class="num">${fmt(d.Spend)}</td><td class="num">${fN(d.Impressions)}</td><td class="num">${fN(d.Clicks)}</td><td class="num">${d.Leads}</td><td class="num">${d.CTR.toFixed(2)}%</td></tr>`;
+      }
     }
     $('#tblOther thead').innerHTML = hO;
     $('#tblOther tbody').innerHTML = bO;
   }
+
+  bindExpand();
 }
 
-// ===== AD SETS TABLE =====
-function renderAdSetsTable() {
-  const { from, to } = getDateRange();
-  const cur = filterRows(from, to);
-  const adSets = aggregateAdSets(cur);
-
-  const t = $('#tblAdSets');
-  t.querySelector('thead').innerHTML = `<tr><th>Ad Set</th><th>Campaign</th><th>Type</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">Reach</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">CTR</th></tr>`;
-
-  if (!adSets.length) {
-    t.querySelector('tbody').innerHTML = `<tr><td colspan="10" class="tbl-empty">No ad sets in this period</td></tr>`;
-    return;
-  }
-
-  const rows = adSets.map(a => {
-    const overT = a.cpl > CONFIG.targetCPL;
-    const cplCls = a.cpl > 0 ? (overT ? 'bad' : 'good') : '';
-    const typeBadge = a.type === 'Leads' ? `<span class="badge badge-leads">Leads</span>` : a.type === 'BA' ? `<span class="badge badge-ba">BA</span>` : `<span class="badge badge-other">${a.type}</span>`;
-    return `<tr><td class="cname" title="${escHTML(a.name)}">${escHTML(a.name)}</td><td class="cname" style="font-weight:400;color:var(--text-sec)" title="${escHTML(a.campaignName)}">${escHTML(a.campaignName)}</td><td>${typeBadge}</td><td class="num">${fmt(a.spend)}</td><td class="num">${a.leads}</td><td class="num ${cplCls}">${a.cpl > 0 ? fmt(a.cpl) : '–'}</td><td class="num">${fN(a.reach)}</td><td class="num">${fN(a.impressions)}</td><td class="num">${fN(a.clicks)}</td><td class="num">${a.ctr.toFixed(2)}%</td></tr>`;
-  }).join('');
-  t.querySelector('tbody').innerHTML = rows;
-}
-
-// ===== ADS TABLE =====
-function renderAdsTable() {
-  const { from, to } = getDateRange();
-  const cur = filterRows(from, to);
-  const ads = aggregateAds(cur);
-
-  const t = $('#tblAds');
-  t.querySelector('thead').innerHTML = `<tr><th>Ad</th><th>Ad Set / Campaign</th><th>Type</th><th class="num">Spend</th><th class="num">Leads</th><th class="num">CPL</th><th class="num">Impr.</th><th class="num">Clicks</th><th class="num">CTR</th><th class="num">CPC</th></tr>`;
-
-  if (!ads.length) {
-    t.querySelector('tbody').innerHTML = `<tr><td colspan="10" class="tbl-empty">No ads in this period</td></tr>`;
-    return;
-  }
-
-  const rows = ads.map(a => {
-    const overT = a.cpl > CONFIG.targetCPL;
-    const cplCls = a.cpl > 0 ? (overT ? 'bad' : 'good') : '';
-    const typeBadge = a.type === 'Leads' ? `<span class="badge badge-leads">Leads</span>` : a.type === 'BA' ? `<span class="badge badge-ba">BA</span>` : `<span class="badge badge-other">${a.type}</span>`;
-    const subtitle = `${escHTML(a.adSetName || '')} · ${escHTML(a.campaignName || '')}`;
-    return `<tr><td class="cname" title="${escHTML(a.name)}">${escHTML(a.name)}</td><td class="cname" style="font-weight:400;color:var(--text-sec);font-size:.72rem;max-width:340px" title="${subtitle}">${subtitle}</td><td>${typeBadge}</td><td class="num">${fmt(a.spend)}</td><td class="num">${a.leads}</td><td class="num ${cplCls}">${a.cpl > 0 ? fmt(a.cpl) : '–'}</td><td class="num">${fN(a.impressions)}</td><td class="num">${fN(a.clicks)}</td><td class="num">${a.ctr.toFixed(2)}%</td><td class="num">${a.cpc > 0 ? fmt(a.cpc) : '–'}</td></tr>`;
-  }).join('');
-  t.querySelector('tbody').innerHTML = rows;
+function bindExpand() {
+  $$('.camp-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = row.dataset.camp;
+      const open = row.classList.toggle('expanded');
+      $$(`.day-row[data-parent="${id}"]`).forEach(d => d.classList.toggle('show', open));
+    });
+  });
 }
 
 // ===== LEAD RUNS TABLE =====
@@ -927,8 +856,6 @@ function renderAll() {
   renderKPIs();
   renderInsights();
   renderTables();
-  renderAdSetsTable();
-  renderAdsTable();
   renderRunsTable();
 }
 
